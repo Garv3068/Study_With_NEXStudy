@@ -1,0 +1,21 @@
+# Core app
+streamlit==1.39.0
+
+# PDF handling
+PyPDF2==3.0.1
+
+# Text processing & Mnemonics (later)
+nltk==3.9.1
+transformers==4.46.1
+torch==2.4.1
+
+# Image upload and OCR (for future image-based notes)
+pillow==10.4.0
+pytesseract==0.3.13
+
+# Firebase integration (for login, storage, etc.)
+firebase-admin==6.5.0
+
+# Optional utilities
+requests==2.32.3
+beautifulsoup4==4.12.3
