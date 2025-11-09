@@ -7,7 +7,7 @@ PyPDF2==3.0.1
 # Text processing & Mnemonics (later)
 nltk==3.9.1
 transformers==4.46.1
-torch==2.4.1
+torch==2.5.1
 
 # Image upload and OCR (for future image-based notes)
 pillow==10.4.0
