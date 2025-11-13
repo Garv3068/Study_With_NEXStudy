@@ -1,15 +1,16 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="EduNex - AI Study Helper",
-    layout="wide",
-    page_icon="🎓"
+    page_title="NexStudy - Your AI Study Helper",
+    page_icon="🧠",
+    layout="wide"
 )
 
+
 # --- Main Home Content ---
-st.title("🎓 Welcome to EduNex – Your AI Study Helper")
+st.title("🎓 Welcome to NexStudy – Your AI Study Helper")
 st.markdown("""
-EduNex empowers students with AI-driven learning tools.  
+NexStudy empowers students with AI-driven learning tools.  
 🚀 Learn smarter, not harder.
 """)
 
@@ -46,4 +47,4 @@ with col5:
     st.page_link("pages/3_Dashboard.py", label="Open Dashboard", icon="➡️")
 
 st.markdown("---")
-st.caption("✨ Built with ❤️ by Garv | Powered by AI | EduNex 2025")
+st.caption("✨ Built with ❤️ by Garv | Powered by AI | NexStudy 2025")
