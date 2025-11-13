@@ -1,10 +1,10 @@
 import streamlit as st
 
-st.title("ℹ️ About EduNex")
+st.title("ℹ️ About NexStudy")
 st.markdown("""
-### EduNex — AI-Powered Study Helper  
+### NexStudy — AI-Powered Study Helper  
 
-EduNex helps students simplify learning using AI and smart NLP tools.
+NexStudy helps students simplify learning using AI and smart NLP tools.
 
 **Features (MVP):**
 - PDF & Text Summarization  
