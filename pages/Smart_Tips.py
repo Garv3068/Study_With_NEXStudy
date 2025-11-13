@@ -11,7 +11,7 @@ tips = [
     "Avoid multitasking — deep focus for short intervals is more effective.",
     "Sleep well. Retention improves drastically with rest.",
     "After studying, write a one-line summary for every concept you learned.",
-    "Use AI tools like EduNex to summarize, quiz, and review efficiently!"
+    "Use AI tools like NexStudy to summarize, quiz, and review efficiently!"
 ]
 
 if st.button("Generate a Study Tip"):
