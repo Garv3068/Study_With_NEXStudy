@@ -79,7 +79,7 @@ body {
                 code = f"""
 // Auto-generated JS code
 function greet() {{
-  console.log("Hello from EduNex AI — {prompt}!");
+  console.log("Hello from NexStudy AI — {prompt}!");
 }}
 greet();
 """
@@ -213,3 +213,4 @@ with tab2:
                         st.write("•", i)
                     st.subheader("✅ Corrected JavaScript")
                     st.code(fixed_code, language="javascript")
+                    
