@@ -36,7 +36,7 @@ st.caption("Multi-language AI Code Generator & Rule-based Debugger")
 # CREATE TABS
 # ----------------------------------
 
-tab1, tab2 = st.tabs(["⚙️ Code Generator (Gemini)", "🛠️ AI Debugger (Rule-Based)"])
+tab1, tab2 = st.tabs(["⚙️ Code Generator ", "🛠️ AI Debugger (Rule-Based)"])
 
 # =====================================================
 # TAB 1 — CODE GENERATOR (Gemini)
