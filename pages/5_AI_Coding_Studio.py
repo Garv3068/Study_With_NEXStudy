@@ -30,7 +30,7 @@ SUPPORTED_LANGUAGES = {
 # ----------------------------------
 
 st.title("🧠 NexStudy – AI Coding Studio")
-st.caption("Multi-language AI Code Generator & Rule-based Debugger (No OpenAI)")
+st.caption("Multi-language AI Code Generator & Rule-based Debugger")
 
 # ----------------------------------
 # CREATE TABS
