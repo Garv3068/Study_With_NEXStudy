@@ -15,7 +15,7 @@ st.write("Upload a PDF or paste text and generate MCQs automatically.")
 @st.cache_resource
 def init_gemini_model():
     try:
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         # Prefer 2.5 flash; fallback handled in exception
         try:
             return genai.GenerativeModel("gemini-2.5-flash")
