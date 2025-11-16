@@ -5,13 +5,27 @@ import re
 # ----------------------------------
 # API KEY (Gemini Only)
 # ----------------------------------
+# ---------------------------
+# GEMINI INITIALIZATION
+# ---------------------------
+@st.cache_resource
+def init_gemini():
+    try:
+        key = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=key)
 
-key = st.secrets["GEMINI_API_KEY"]
-genai.configure(api_key=key)
+        try:
+            return genai.GenerativeModel("gemini-2.5-flash")
+        except:
+            st.warning("⚠️ Gemini 2.5 Flash not available. Switching to Gemini 2.0 Flash.")
+            return genai.GenerativeModel("gemini-2.0-flash")
+
+    except Exception as e:
+        st.error(f"Gemini initialization error: {e}")
+        return None
 
 
-# Gemini Model
-gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+gemini_model = init_gemini()
 
 # ----------------------------------
 # LANGUAGE OPTIONS
