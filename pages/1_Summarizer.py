@@ -4,7 +4,7 @@ import google.generativeai as genai
 # Safe config for all pages
 def load_gemini_key():
     try:
-        return st.secrets["GEMINI_API_KEY"]
+        return st.secrets["gemini_api_key"]
     except KeyError:
         st.error("❌ GEMINI_API_KEY is missing in Streamlit Secrets!")
         st.stop()
