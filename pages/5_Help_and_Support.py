@@ -11,5 +11,6 @@ Here’s how you can use our key tools:
 - **Smart Tips:** Get daily study techniques and motivation.
 
 For queries or suggestions, contact:  
-📧 help.nexstudy@gmail.com
+📧 help.nexstudy@gmail.com or 
+https://forms.gle/qcCwYhF9E6dbbFuS7
 """)
