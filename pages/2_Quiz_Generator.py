@@ -5,7 +5,8 @@ import pdfplumber
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.corpus import stopwords
 import string
-import google.generativeai as genai   # ✅ Added for Gemini
+import google.generativeai as genai
+import json # ✅ FIX 1: Import the json library for safe JSON parsing
 
 # ---------------- GEMINI INIT ----------------
 @st.cache_resource
@@ -84,7 +85,7 @@ def generate_questions(text, num_questions=5):
 
     try:
         response = gemini_model.generate_content(prompt)
-        quiz = eval(response.text)  # safe because Gemini outputs JSON list
+        quiz = json.loads(response.text)  # ✅ FIX 2: Replace eval() with json.loads()
 
         return quiz
 
