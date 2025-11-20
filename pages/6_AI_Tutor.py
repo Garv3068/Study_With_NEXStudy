@@ -54,7 +54,7 @@ def init_gemini():
         genai.configure(api_key=key)
 
         try:
-            return genai.GenerativeModel("gemini-2.5-flash")
+            return genai.GenerativeModel("gemini-2.5-pro")
         except Exception:
             st.warning("⚠️ Gemini 2.5 Flash not available. Switching to Gemini 2.0 Flash.")
             return genai.GenerativeModel("gemini-2.0-flash")
