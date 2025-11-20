@@ -66,7 +66,7 @@ RETURN ONLY THIS FORMAT:
 
 
 # ---------------- STREAMLIT UI ----------------
-st.title("🧠 Smart Quiz Generator (Gemini Powered)")
+st.title("🧠 Smart Quiz Generator")
 st.write("Generate quizzes from your notes or PDFs instantly!")
 
 # --- Session State Initialization ---
