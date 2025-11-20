@@ -70,9 +70,9 @@ def build_prompt(topic: str, level: str, request_youtube: bool = True, max_examp
     instruction = level_map.get(level, level_map["College"])
 
     extra = ""
-     if request_youtube:
-         extra = "Also include 2–3 relevant YouTube links and 2–3 web links (if available) that help understand the topic. " \
-                 "Mark links clearly so they can be extracted (e.g., start links on a new line)."
+         if request_youtube:
+             extra = "Also include 2–3 relevant YouTube links and 2–3 web links (if available) that help understand the topic. " \
+                     "Mark links clearly so they can be extracted (e.g., start links on a new line)."
 
     prompt = (
         f"You are an expert tutor. {instruction}\n\n"
