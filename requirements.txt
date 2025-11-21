@@ -26,4 +26,4 @@ duckduckgo-search
 google-generativeai
 openai
 pytesseract
-PIL
+io
