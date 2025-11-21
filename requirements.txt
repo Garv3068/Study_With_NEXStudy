@@ -25,3 +25,4 @@ matplotlib==3.9.2
 duckduckgo-search
 google-generativeai
 openai
+pytesseract
