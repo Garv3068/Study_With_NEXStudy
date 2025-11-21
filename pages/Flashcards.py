@@ -22,9 +22,7 @@ st.caption("""
 # ---------------- Gemini Initialization (Robust) ----------------
 @st.cache_resource
 def init_gemini(api_key_input):
-    # 1. Try getting key from user input first
     key = api_key_input
-    # 2. If no user input, try secrets
     if not key:
         try:
             key = st.secrets.get("GEMINI_API_KEY")
@@ -45,7 +43,6 @@ def init_gemini(api_key_input):
 with st.sidebar:
     st.header("⚙️ Settings")
     
-    # Check if secret key exists
     has_secret_key = False
     try:
         if st.secrets.get("GEMINI_API_KEY"):
@@ -105,27 +102,86 @@ left, right = st.columns([1, 2])
 
 # ---------------- LEFT COLUMN: Controls ----------------
 with left:
-    st.markdown("### 📤 Input")
-    st.info("Chat below or upload materials to get started.")
-    
-    input_choice = st.radio("I want to upload:", ("None (Just Chat)", "PDF Document", "Image (Problem/Diagram)"), index=0)
+    # --- MODE SELECTION ---
+    st.markdown("### 🛠️ Study Mode")
+    mode = st.radio(
+        "Choose how you want to learn:", 
+        ["💬 Chat / Doubt Solver", "📖 Topic Explainer"], 
+        index=0
+    )
+    st.markdown("---")
 
-    st.divider()
-    
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("🗑️ Clear Chat"):
-            st.session_state.messages = []
-            st.rerun()
-    with col_b:
-        if st.button("💾 Saved Notes"):
-            if st.session_state.saved:
-                st.write("**Your Saved Items:**")
-                for i, item in enumerate(st.session_state.saved, 1):
-                    with st.expander(f"{i}. {item['timestamp']}"):
-                        st.write(item["text"])
+    # ==========================================
+    # MODE 1: CHAT / DOUBT SOLVER
+    # ==========================================
+    if mode == "💬 Chat / Doubt Solver":
+        st.info("Chat below or upload materials to get started.")
+        
+        # We use session state to store this choice so the bottom form knows what to show
+        st.session_state.input_type = st.radio(
+            "I want to upload:", 
+            ("None (Just Chat)", "PDF Document", "Image (Problem/Diagram)"), 
+            index=0
+        )
+
+        st.divider()
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("🗑️ Clear Chat"):
+                st.session_state.messages = []
+                st.rerun()
+        with col_b:
+            if st.button("💾 Saved Notes"):
+                if st.session_state.saved:
+                    st.write("**Your Saved Items:**")
+                    for i, item in enumerate(st.session_state.saved, 1):
+                        with st.expander(f"{i}. {item['timestamp']}"):
+                            st.write(item["text"])
+                else:
+                    st.info("No saved notes yet.")
+
+    # ==========================================
+    # MODE 2: TOPIC EXPLAINER (From Screenshot)
+    # ==========================================
+    elif mode == "📖 Topic Explainer":
+        st.markdown("#### 🧠 Explain a Topic")
+        
+        topic_input = st.text_input("Enter a topic you want to learn:", placeholder="e.g., Recursion, DBMS, Black Holes")
+        
+        explanation_level = st.selectbox(
+            "Choose explanation level:",
+            ["ELI5 (Like I'm 5)", "Beginner (High School)", "Intermediate (College)", "Advanced (Research)"]
+        )
+        
+        include_links = st.checkbox("Include YouTube & web links (recommended)", value=True)
+        
+        if st.button("🧠 Explain Topic", type="primary"):
+            if not topic_input.strip():
+                st.warning("Please enter a topic first.")
             else:
-                st.info("No saved notes yet.")
+                # Construct the Prompt
+                prompt_text = f"Explain the topic '{topic_input}'."
+                prompt_details = f"Level: {explanation_level}.\n"
+                if include_links:
+                    prompt_details += "Please include 3-5 high-quality references (YouTube links or standard documentation URLs) at the end."
+                
+                full_prompt = f"{prompt_text}\n{prompt_details}"
+                
+                # 1. Add to Chat History
+                append_user_message(f"**Topic Request:** {topic_input}\n*Level:* {explanation_level}")
+                
+                # 2. Call Gemini
+                if gemini_model:
+                    with st.spinner(f"Generating {explanation_level} explanation for '{topic_input}'..."):
+                        res = call_gemini([f"You are an expert tutor. {full_prompt}"])
+                        if not res.get("error"):
+                            append_assistant_message(res["text"])
+                            st.rerun()
+                        else:
+                            st.error(res["error"])
+                else:
+                    st.error("Gemini API Key missing.")
 
 # ---------------- RIGHT COLUMN: Chat Interface ----------------
 with right:
@@ -170,7 +226,6 @@ with right:
                 st.markdown(f"<div class='ai'><b>NexStudy AI:</b><br>{ai_text_display}</div>", unsafe_allow_html=True)
                 
                 # --- Action Buttons (Study Tools) ---
-                # We use a unique key based on index 'i'
                 b1, b2, b3, b4, b5 = st.columns([1,1,1,1,1])
                 
                 if b1.button(f"Simplify 👶", key=f"simp_{i}", help="Explain like I'm 5"):
@@ -205,24 +260,30 @@ with right:
 
     st.markdown("---")
 
-    # ---------------- INPUT FORM ----------------
+    # ---------------- INPUT FORM (Always visible for follow-ups) ----------------
+    # Even if in Topic Explainer mode, user might want to ask a follow-up question.
     with st.form(key="chat_form", clear_on_submit=False):
         col_input, col_btn = st.columns([6, 1])
         
         with col_input:
-            user_input = st.text_area("Ask a question or explain what you need help with:", height=100, key="u_in")
+            user_input = st.text_area("Ask a follow-up question or new doubt:", height=100, key="u_in")
         
-        # File Uploaders (Conditional)
+        # Logic to show uploaders ONLY if in Chat Mode
         uploaded_pdf = None
         uploaded_image = None
         
-        if input_choice == "PDF Document":
-            uploaded_pdf = st.file_uploader("Upload PDF (Notes/Book):", type=["pdf"])
-        elif input_choice == "Image (Problem/Diagram)":
-            uploaded_image = st.file_uploader("Upload Image:", type=["png","jpg","jpeg"])
+        # Check if 'input_type' exists in session state (from Left Column Chat Mode)
+        current_input_type = st.session_state.get("input_type", "None (Just Chat)")
+        
+        # Only show file uploaders if we are in Chat Mode
+        if mode == "💬 Chat / Doubt Solver":
+            if current_input_type == "PDF Document":
+                uploaded_pdf = st.file_uploader("Upload PDF:", type=["pdf"])
+            elif current_input_type == "Image (Problem/Diagram)":
+                uploaded_image = st.file_uploader("Upload Image:", type=["png","jpg","jpeg"])
 
         with col_btn:
-            st.write("") # spacer
+            st.write("") 
             st.write("") 
             submit_clicked = st.form_submit_button("🚀 Send")
 
@@ -230,53 +291,34 @@ with right:
             content_parts = []
             display_text = []
 
-            # 1. System Persona
-            system_prompt = """
-            You are NexStudy AI, a smart and patient tutor. 
-            - If the user asks for a solution, explain the steps clearly.
-            - If the user uploads an image, analyze it (multimodal).
-            - If the user sends notes, summarize or explain them.
-            Keep answers concise but helpful.
-            """
+            system_prompt = "You are NexStudy AI. Answer concisely but helpful."
             content_parts.append(system_prompt)
 
-            # 2. Text Input
             if user_input and user_input.strip():
                 content_parts.append(user_input)
                 display_text.append(user_input)
 
-            # 3. PDF Handling
             if uploaded_pdf:
                 pdf_text = extract_text_from_pdf(uploaded_pdf)
                 if pdf_text:
                     content_parts.append(f"Context from uploaded PDF:\n{pdf_text}")
                     display_text.append(f"📄 [Attached PDF: {uploaded_pdf.name}]")
-                else:
-                    st.warning("Could not extract text from PDF.")
-
-            # 4. Image Handling (Direct to Gemini)
+            
             if uploaded_image:
                 try:
                     img = Image.open(uploaded_image)
                     content_parts.append(img)
                     display_text.append(f"🖼️ [Attached Image: {uploaded_image.name}]")
-                except Exception as e:
-                    st.error(f"Error processing image: {e}")
+                except Exception:
+                    pass
 
-            # Validation & Execution
             if not display_text and not uploaded_image and not uploaded_pdf:
-                st.warning("Please type a message or upload a file.")
+                st.warning("Please type a message.")
             else:
-                # Show User Message
                 append_user_message("\n".join(display_text))
-
-                if gemini_model is None:
-                    st.error("Gemini API Key missing. Check sidebar.")
-                else:
-                    with st.spinner("NexStudy is thinking..."):
+                if gemini_model:
+                    with st.spinner("Thinking..."):
                         res = call_gemini(content_parts)
-                        if res.get("error"):
-                            st.error(res["error"])
-                        else:
+                        if not res.get("error"):
                             append_assistant_message(res["text"])
                             st.rerun()
