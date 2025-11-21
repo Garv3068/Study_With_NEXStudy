@@ -67,6 +67,9 @@ if "messages" not in st.session_state:
 if "saved" not in st.session_state:
     st.session_state.saved = []
 
+if "topic_explanation" not in st.session_state:
+    st.session_state.topic_explanation = ""
+
 # ---------------- Helpers ----------------
 def extract_text_from_pdf(uploaded_file):
     try:
@@ -117,7 +120,6 @@ with left:
     if mode == "💬 Chat / Doubt Solver":
         st.info("Chat below or upload materials to get started.")
         
-        # We use session state to store this choice so the bottom form knows what to show
         st.session_state.input_type = st.radio(
             "I want to upload:", 
             ("None (Just Chat)", "PDF Document", "Image (Problem/Diagram)"), 
@@ -142,7 +144,7 @@ with left:
                     st.info("No saved notes yet.")
 
     # ==========================================
-    # MODE 2: TOPIC EXPLAINER (From Screenshot)
+    # MODE 2: TOPIC EXPLAINER
     # ==========================================
     elif mode == "📖 Topic Explainer":
         st.markdown("#### 🧠 Explain a Topic")
@@ -168,157 +170,179 @@ with left:
                 
                 full_prompt = f"{prompt_text}\n{prompt_details}"
                 
-                # 1. Add to Chat History
-                append_user_message(f"**Topic Request:** {topic_input}\n*Level:* {explanation_level}")
-                
-                # 2. Call Gemini
                 if gemini_model:
                     with st.spinner(f"Generating {explanation_level} explanation for '{topic_input}'..."):
                         res = call_gemini([f"You are an expert tutor. {full_prompt}"])
                         if not res.get("error"):
-                            append_assistant_message(res["text"])
+                            # Save to a separate state variable, NOT the chat history
+                            st.session_state.topic_explanation = res["text"]
                             st.rerun()
                         else:
                             st.error(res["error"])
                 else:
                     st.error("Gemini API Key missing.")
 
-# ---------------- RIGHT COLUMN: Chat Interface ----------------
+# ---------------- RIGHT COLUMN: Output ----------------
 with right:
-    # CSS: Force black text in chat bubbles for Dark Mode visibility
-    st.markdown(
-        """
-        <style>
-        .chat-box { max-height: 64vh; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:12px; }
-        .user { 
-            align-self:flex-end; 
-            background:#DCF8C6; 
-            color: #000000; 
-            padding:12px; 
-            border-radius:12px; 
-            max-width:80%; 
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        .ai { 
-            align-self:flex-start; 
-            background:#F1F3F5; 
-            color: #000000; 
-            padding:12px; 
-            border-radius:12px; 
-            max-width:80%; 
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        </style>
-        """, unsafe_allow_html=True)
+    
+    # ==========================================
+    # VIEW 1: CHAT INTERFACE
+    # ==========================================
+    if mode == "💬 Chat / Doubt Solver":
+        # CSS: Force black text in chat bubbles for Dark Mode visibility
+        st.markdown(
+            """
+            <style>
+            .chat-box { max-height: 64vh; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:12px; }
+            .user { 
+                align-self:flex-end; 
+                background:#DCF8C6; 
+                color: #000000; 
+                padding:12px; 
+                border-radius:12px; 
+                max-width:80%; 
+                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            }
+            .ai { 
+                align-self:flex-start; 
+                background:#F1F3F5; 
+                color: #000000; 
+                padding:12px; 
+                border-radius:12px; 
+                max-width:80%; 
+                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            }
+            </style>
+            """, unsafe_allow_html=True)
 
-    chat_box = st.container()
-    with chat_box:
-        st.markdown('<div class="chat-box">', unsafe_allow_html=True)
-        for i, msg in enumerate(st.session_state.messages):
-            # Render User Message
-            if msg["role"] == "user":
-                user_text = msg['text'].replace('\n', '<br>')
-                st.markdown(f"<div class='user'><b>You:</b><br>{user_text}</div>", unsafe_allow_html=True)
+        chat_box = st.container()
+        with chat_box:
+            st.markdown('<div class="chat-box">', unsafe_allow_html=True)
+            for i, msg in enumerate(st.session_state.messages):
+                # Render User Message
+                if msg["role"] == "user":
+                    user_text = msg['text'].replace('\n', '<br>')
+                    st.markdown(f"<div class='user'><b>You:</b><br>{user_text}</div>", unsafe_allow_html=True)
+                
+                # Render AI Message + Tool Buttons
+                else:
+                    ai_text_display = msg['text'].replace('\n', '<br>')
+                    st.markdown(f"<div class='ai'><b>NexStudy AI:</b><br>{ai_text_display}</div>", unsafe_allow_html=True)
+                    
+                    # --- Action Buttons (Study Tools) ---
+                    b1, b2, b3, b4, b5 = st.columns([1,1,1,1,1])
+                    
+                    if b1.button(f"Simplify 👶", key=f"simp_{i}", help="Explain like I'm 5"):
+                        res = call_gemini([f"Explain this response in much simpler terms with an analogy:\n\n{msg['text']}"])
+                        if not res.get("error"):
+                            append_assistant_message(res["text"])
+                            st.rerun()
+                            
+                    if b2.button(f"Steps 🪜", key=f"step_{i}", help="Show step-by-step solution"):
+                        res = call_gemini([f"Break this down into clear, numbered steps:\n\n{msg['text']}"])
+                        if not res.get("error"):
+                            append_assistant_message(res["text"])
+                            st.rerun()
+
+                    if b3.button(f"Quiz 🎯", key=f"quiz_{i}", help="Generate a quiz based on this"):
+                        res = call_gemini([f"Create 3 Multiple Choice Questions (with answers at the end) to test my understanding of this:\n\n{msg['text']}"])
+                        if not res.get("error"):
+                            append_assistant_message(res["text"])
+                            st.rerun()
+                            
+                    if b4.button(f"Cards 🃏", key=f"card_{i}", help="Make flashcards"):
+                        res = call_gemini([f"Create 5 Flashcards (Front/Back format) from this content:\n\n{msg['text']}"])
+                        if not res.get("error"):
+                            append_assistant_message(res["text"])
+                            st.rerun()
+                            
+                    if b5.button(f"Save 💾", key=f"sav_{i}"):
+                        st.session_state.saved.append({"text": msg["text"], "timestamp": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))})
+                        st.success("Saved!")
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # ---------------- CHAT INPUT FORM ----------------
+        with st.form(key="chat_form", clear_on_submit=False):
+            col_input, col_btn = st.columns([6, 1])
             
-            # Render AI Message + Tool Buttons
-            else:
-                ai_text_display = msg['text'].replace('\n', '<br>')
-                st.markdown(f"<div class='ai'><b>NexStudy AI:</b><br>{ai_text_display}</div>", unsafe_allow_html=True)
-                
-                # --- Action Buttons (Study Tools) ---
-                b1, b2, b3, b4, b5 = st.columns([1,1,1,1,1])
-                
-                if b1.button(f"Simplify 👶", key=f"simp_{i}", help="Explain like I'm 5"):
-                    res = call_gemini([f"Explain this response in much simpler terms with an analogy:\n\n{msg['text']}"])
-                    if not res.get("error"):
-                        append_assistant_message(res["text"])
-                        st.rerun()
-                        
-                if b2.button(f"Steps 🪜", key=f"step_{i}", help="Show step-by-step solution"):
-                    res = call_gemini([f"Break this down into clear, numbered steps:\n\n{msg['text']}"])
-                    if not res.get("error"):
-                        append_assistant_message(res["text"])
-                        st.rerun()
+            with col_input:
+                user_input = st.text_area("Ask a question:", height=100, key="u_in")
+            
+            # Uploaders (Only shown if input_type is correct)
+            uploaded_pdf = None
+            uploaded_image = None
+            current_input_type = st.session_state.get("input_type", "None")
 
-                if b3.button(f"Quiz 🎯", key=f"quiz_{i}", help="Generate a quiz based on this"):
-                    res = call_gemini([f"Create 3 Multiple Choice Questions (with answers at the end) to test my understanding of this:\n\n{msg['text']}"])
-                    if not res.get("error"):
-                        append_assistant_message(res["text"])
-                        st.rerun()
-                        
-                if b4.button(f"Cards 🃏", key=f"card_{i}", help="Make flashcards"):
-                    res = call_gemini([f"Create 5 Flashcards (Front/Back format) from this content:\n\n{msg['text']}"])
-                    if not res.get("error"):
-                        append_assistant_message(res["text"])
-                        st.rerun()
-                        
-                if b5.button(f"Save 💾", key=f"sav_{i}"):
-                    st.session_state.saved.append({"text": msg["text"], "timestamp": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))})
-                    st.success("Saved!")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # ---------------- INPUT FORM (Always visible for follow-ups) ----------------
-    # Even if in Topic Explainer mode, user might want to ask a follow-up question.
-    with st.form(key="chat_form", clear_on_submit=False):
-        col_input, col_btn = st.columns([6, 1])
-        
-        with col_input:
-            user_input = st.text_area("Ask a follow-up question or new doubt:", height=100, key="u_in")
-        
-        # Logic to show uploaders ONLY if in Chat Mode
-        uploaded_pdf = None
-        uploaded_image = None
-        
-        # Check if 'input_type' exists in session state (from Left Column Chat Mode)
-        current_input_type = st.session_state.get("input_type", "None (Just Chat)")
-        
-        # Only show file uploaders if we are in Chat Mode
-        if mode == "💬 Chat / Doubt Solver":
             if current_input_type == "PDF Document":
                 uploaded_pdf = st.file_uploader("Upload PDF:", type=["pdf"])
             elif current_input_type == "Image (Problem/Diagram)":
                 uploaded_image = st.file_uploader("Upload Image:", type=["png","jpg","jpeg"])
 
-        with col_btn:
-            st.write("") 
-            st.write("") 
-            submit_clicked = st.form_submit_button("🚀 Send")
+            with col_btn:
+                st.write("") 
+                st.write("") 
+                submit_clicked = st.form_submit_button("🚀 Send")
 
-        if submit_clicked:
-            content_parts = []
-            display_text = []
+            if submit_clicked:
+                content_parts = []
+                display_text = []
 
-            system_prompt = "You are NexStudy AI. Answer concisely but helpful."
-            content_parts.append(system_prompt)
+                system_prompt = "You are NexStudy AI. Answer concisely but helpful."
+                content_parts.append(system_prompt)
 
-            if user_input and user_input.strip():
-                content_parts.append(user_input)
-                display_text.append(user_input)
+                if user_input and user_input.strip():
+                    content_parts.append(user_input)
+                    display_text.append(user_input)
 
-            if uploaded_pdf:
-                pdf_text = extract_text_from_pdf(uploaded_pdf)
-                if pdf_text:
-                    content_parts.append(f"Context from uploaded PDF:\n{pdf_text}")
-                    display_text.append(f"📄 [Attached PDF: {uploaded_pdf.name}]")
+                if uploaded_pdf:
+                    pdf_text = extract_text_from_pdf(uploaded_pdf)
+                    if pdf_text:
+                        content_parts.append(f"Context from uploaded PDF:\n{pdf_text}")
+                        display_text.append(f"📄 [Attached PDF: {uploaded_pdf.name}]")
+                
+                if uploaded_image:
+                    try:
+                        img = Image.open(uploaded_image)
+                        content_parts.append(img)
+                        display_text.append(f"🖼️ [Attached Image: {uploaded_image.name}]")
+                    except Exception:
+                        pass
+
+                if not display_text and not uploaded_image and not uploaded_pdf:
+                    st.warning("Please type a message.")
+                else:
+                    append_user_message("\n".join(display_text))
+                    if gemini_model:
+                        with st.spinner("Thinking..."):
+                            res = call_gemini(content_parts)
+                            if not res.get("error"):
+                                append_assistant_message(res["text"])
+                                st.rerun()
+    
+    # ==========================================
+    # VIEW 2: TOPIC EXPLAINER OUTPUT
+    # ==========================================
+    elif mode == "📖 Topic Explainer":
+        # No chat bubbles, just clean document view
+        if st.session_state.topic_explanation:
+            st.markdown("### 📝 Explanation")
+            st.markdown("---")
+            st.markdown(st.session_state.topic_explanation)
             
-            if uploaded_image:
-                try:
-                    img = Image.open(uploaded_image)
-                    content_parts.append(img)
-                    display_text.append(f"🖼️ [Attached Image: {uploaded_image.name}]")
-                except Exception:
-                    pass
-
-            if not display_text and not uploaded_image and not uploaded_pdf:
-                st.warning("Please type a message.")
-            else:
-                append_user_message("\n".join(display_text))
-                if gemini_model:
-                    with st.spinner("Thinking..."):
-                        res = call_gemini(content_parts)
-                        if not res.get("error"):
-                            append_assistant_message(res["text"])
-                            st.rerun()
+            st.markdown("---")
+            # Optional: Code block to allow copying the full text
+            if st.button("📋 Copy to Clipboard (Manual)"):
+                 st.code(st.session_state.topic_explanation)
+                 st.info("Copy the text above.")
+        else:
+            st.info("👈 Select a topic on the left sidebar to generate an explanation here.")
+            st.markdown("""
+            **What you'll get:**
+            - Detailed concepts 📚
+            - Simple analogies 🧸
+            - Key takeaways 🗝️
+            - Useful references 🔗
+            """)
