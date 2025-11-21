@@ -142,31 +142,31 @@ with right:
                 # Buttons for AI response
                 cols = st.columns([1,1,1,1,1])
                 
-                if cols[0].button(f"Explain Simpler 🔍 {i}", key=f"simpler_{i}"):
+                if cols[0].button(f"Explain Simpler 🔍", key=f"simpler_{i}"):
                     res = call_gemini([f"Explain this simpler:\n\n{msg['text']}"])
                     if not res.get("error"):
                         append_assistant_message(res["text"])
                         st.rerun()
                         
-                if cols[1].button(f"Show Steps 🪜 {i}", key=f"steps_{i}"):
+                if cols[1].button(f"Show Steps 🪜", key=f"steps_{i}"):
                     res = call_gemini([f"Show step-by-step solution:\n\n{msg['text']}"])
                     if not res.get("error"):
                         append_assistant_message(res["text"])
                         st.rerun()
 
-                if cols[2].button(f"Generate Quiz 🎯 {i}", key=f"quiz_{i}"):
+                if cols[2].button(f"Generate Quiz 🎯", key=f"quiz_{i}"):
                     res = call_gemini([f"Create 5 MCQs from this:\n\n{msg['text']}"])
                     if not res.get("error"):
                         append_assistant_message(res["text"])
                         st.rerun()
                         
-                if cols[3].button(f"Flashcards 🧾 {i}", key=f"flash_{i}"):
+                if cols[3].button(f"Flashcards 🧾", key=f"flash_{i}"):
                     res = call_gemini([f"Create flashcards from this:\n\n{msg['text']}"])
                     if not res.get("error"):
                         append_assistant_message(res["text"])
                         st.rerun()
                         
-                if cols[4].button(f"Save 💾 {i}", key=f"save_{i}"):
+                if cols[4].button(f"Save 💾", key=f"save_{i}"):
                     st.session_state.saved.append({"title": msg["text"][:50]+"...", "text": msg["text"], "timestamp": str(datetime.datetime.now())})
                     st.success("Saved!")
 
