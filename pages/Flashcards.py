@@ -189,87 +189,63 @@ with right:
     # VIEW 1: CHAT INTERFACE
     # ==========================================
     if mode == "💬 Chat / Doubt Solver":
-        # CSS: Force black text in chat bubbles for Dark Mode visibility
-        st.markdown(
-            """
-            <style>
-            .chat-box { max-height: 64vh; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:12px; }
-            .user { 
-                align-self:flex-end; 
-                background:#DCF8C6; 
-                color: #000000; 
-                padding:12px; 
-                border-radius:12px; 
-                max-width:80%; 
-                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            }
-            .ai { 
-                align-self:flex-start; 
-                background:#F1F3F5; 
-                color: #000000; 
-                padding:12px; 
-                border-radius:12px; 
-                max-width:80%; 
-                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            }
-            </style>
-            """, unsafe_allow_html=True)
-
-        chat_box = st.container()
-        with chat_box:
-            st.markdown('<div class="chat-box">', unsafe_allow_html=True)
+        
+        chat_container = st.container()
+        with chat_container:
             for i, msg in enumerate(st.session_state.messages):
-                # Render User Message
+                # Render User Message (Simple Bold Header + Text)
                 if msg["role"] == "user":
-                    user_text = msg['text'].replace('\n', '<br>')
-                    st.markdown(f"<div class='user'><b>You:</b><br>{user_text}</div>", unsafe_allow_html=True)
+                    st.markdown(f"### 🧑‍🎓 You")
+                    st.markdown(msg['text'])
                 
-                # Render AI Message + Tool Buttons
+                # Render AI Message (Simple Header + Text)
                 else:
-                    ai_text_display = msg['text'].replace('\n', '<br>')
-                    st.markdown(f"<div class='ai'><b>NexStudy AI:</b><br>{ai_text_display}</div>", unsafe_allow_html=True)
+                    st.markdown(f"### 🤖 NexStudy AI")
+                    st.markdown(msg['text'])
                     
                     # --- Action Buttons (Study Tools) ---
+                    # Buttons appear directly below the text, clean style
                     b1, b2, b3, b4, b5 = st.columns([1,1,1,1,1])
                     
-                    if b1.button(f"Simplify 👶", key=f"simp_{i}", help="Explain like I'm 5"):
+                    if b1.button(f"Simplify", key=f"simp_{i}", help="Explain like I'm 5"):
                         res = call_gemini([f"Explain this response in much simpler terms with an analogy:\n\n{msg['text']}"])
                         if not res.get("error"):
                             append_assistant_message(res["text"])
                             st.rerun()
                             
-                    if b2.button(f"Steps 🪜", key=f"step_{i}", help="Show step-by-step solution"):
+                    if b2.button(f"Steps", key=f"step_{i}", help="Show step-by-step solution"):
                         res = call_gemini([f"Break this down into clear, numbered steps:\n\n{msg['text']}"])
                         if not res.get("error"):
                             append_assistant_message(res["text"])
                             st.rerun()
 
-                    if b3.button(f"Quiz 🎯", key=f"quiz_{i}", help="Generate a quiz based on this"):
+                    if b3.button(f"Quiz", key=f"quiz_{i}", help="Generate a quiz based on this"):
                         res = call_gemini([f"Create 3 Multiple Choice Questions (with answers at the end) to test my understanding of this:\n\n{msg['text']}"])
                         if not res.get("error"):
                             append_assistant_message(res["text"])
                             st.rerun()
                             
-                    if b4.button(f"Cards 🃏", key=f"card_{i}", help="Make flashcards"):
+                    if b4.button(f"Cards", key=f"card_{i}", help="Make flashcards"):
                         res = call_gemini([f"Create 5 Flashcards (Front/Back format) from this content:\n\n{msg['text']}"])
                         if not res.get("error"):
                             append_assistant_message(res["text"])
                             st.rerun()
                             
-                    if b5.button(f"Save 💾", key=f"sav_{i}"):
+                    if b5.button(f"Save", key=f"sav_{i}"):
                         st.session_state.saved.append({"text": msg["text"], "timestamp": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))})
                         st.success("Saved!")
-
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown("---")
+                    
+                    # Divider to separate message pairs or conversation turns
+                    st.divider()
 
         # ---------------- CHAT INPUT FORM ----------------
+        # Using a container at the bottom to keep input separate
+        st.write("")
         with st.form(key="chat_form", clear_on_submit=False):
             col_input, col_btn = st.columns([6, 1])
             
             with col_input:
-                user_input = st.text_area("Ask a question:", height=100, key="u_in")
+                user_input = st.text_area("Ask a question:", height=100, key="u_in", placeholder="Type here...")
             
             # Uploaders (Only shown if input_type is correct)
             uploaded_pdf = None
