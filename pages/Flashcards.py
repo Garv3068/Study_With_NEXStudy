@@ -193,10 +193,18 @@ with right:
         chat_container = st.container()
         with chat_container:
             for i, msg in enumerate(st.session_state.messages):
-                # Render User Message (Simple Bold Header + Text)
+                # Render User Message (IN GREY BOX)
                 if msg["role"] == "user":
-                    st.markdown(f"### 🧑‍🎓 You")
-                    st.markdown(msg['text'])
+                    user_text = msg['text'].replace('\n', '<br>')
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 15px; color: #000000;">
+                            <h4 style="margin: 0 0 5px 0; color: #000000;">👤 You</h4>
+                            {user_text}
+                        </div>
+                        """, 
+                        unsafe_allow_html=True
+                    )
                 
                 # Render AI Message (Simple Header + Text)
                 else:
