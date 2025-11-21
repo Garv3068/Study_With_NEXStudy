@@ -5,8 +5,9 @@ import pdfplumber
 import io
 import os
 import datetime
-
 from PIL import Image
+
+# ---------------- Tesseract Check ----------------
 try:
     import pytesseract
     TESSERACT_AVAILABLE = True
@@ -32,10 +33,10 @@ def init_gemini():
     try:
         key = st.secrets["GEMINI_API_KEY"]
     except Exception:
-        # no key found
         pass
 
     if not key:
+        # Fallback if not in secrets (optional warning)
         return None
 
     try:
@@ -104,11 +105,6 @@ with left:
     st.markdown("**Input types**")
     input_choice = st.radio("", ("Text", "PDF + Text", "Image + Text"), index=1)
 
-    # st.markdown("---")
-    # st.markdown("**Model**")
-    # st.markdown("Using: **gemini-2.0-flash** (fast & student-friendly)")
-
-    # st.markdown("---")
     if st.button("Clear chat"):
         st.session_state.messages = []
         st.success("Chat cleared.")
@@ -123,7 +119,7 @@ with left:
 
 # ---------------- Right chat column ----------------
 with right:
-    # chat container
+    # chat container styling
     st.markdown(
         """
         <style>
@@ -139,10 +135,17 @@ with right:
         st.markdown('<div class="chat-box">', unsafe_allow_html=True)
         for i, msg in enumerate(st.session_state.messages):
             if msg["role"] == "user":
-                st.markdown(f"<div class='user'><b>You:</b><br>{st.markdown(msg['text'], unsafe_allow_html=False) or ''}</div>", unsafe_allow_html=True)
+                # ------------------------ FIX START ------------------------
+                # Removed the nested st.markdown() call.
+                # Replaced newlines with <br> so paragraphs show up in HTML.
+                user_text = msg['text'].replace('\n', '<br>')
+                st.markdown(f"<div class='user'><b>You:</b><br>{user_text}</div>", unsafe_allow_html=True)
+                # ------------------------ FIX END --------------------------
             else:
+                # Assistant message
                 st.markdown(f"<div class='ai'><b>NexStudy Tutor:</b><br>{msg['text']}</div>", unsafe_allow_html=True)
-                # action buttons for assistant messages
+                
+                # Action buttons for assistant messages
                 cols = st.columns([1,1,1,1,1])
                 with cols[0]:
                     if st.button(f"Explain Simpler 🔍 #{i}", key=f"simpler_{i}"):
@@ -152,6 +155,7 @@ with right:
                             st.error(res["error"])
                         else:
                             append_assistant_message(res["text"])
+                            st.rerun()
                 with cols[1]:
                     if st.button(f"Show Steps 🪜 #{i}", key=f"steps_{i}"):
                         followup_prompt = f"Provide a step-by-step solution or breakdown for the following text:\n\n{msg['text']}"
@@ -160,6 +164,7 @@ with right:
                             st.error(res["error"])
                         else:
                             append_assistant_message(res["text"])
+                            st.rerun()
                 with cols[2]:
                     if st.button(f"Generate Quiz 🎯 #{i}", key=f"quiz_{i}"):
                         followup_prompt = f"Create 5 short MCQs (question + 4 options + correct answer) from the following explanation:\n\n{msg['text']}\n\nReturn concise results."
@@ -168,6 +173,7 @@ with right:
                             st.error(res["error"])
                         else:
                             append_assistant_message(res["text"])
+                            st.rerun()
                 with cols[3]:
                     if st.button(f"Flashcards 🧾 #{i}", key=f"flash_{i}"):
                         followup_prompt = f"Convert the following content into 8 short flashcards in 'Q: ... A: ...' format:\n\n{msg['text']}"
@@ -176,10 +182,12 @@ with right:
                             st.error(res["error"])
                         else:
                             append_assistant_message(res["text"])
+                            st.rerun()
                 with cols[4]:
                     if st.button(f"Save 💾 #{i}", key=f"save_{i}"):
                         st.session_state.saved.append({"title": msg["text"][:60]+"...", "text": msg["text"], "timestamp": str(datetime.datetime.now())})
                         st.success("Saved to your local library.")
+
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
@@ -217,6 +225,7 @@ with right:
                         st.warning("Could not extract text from image. Please describe the image/question below.")
                 else:
                     st.info("OCR not available in this environment. Please add a short description below.")
+            
             if user_input and user_input.strip():
                 content_parts.append("User question:\n" + user_input.strip())
 
@@ -243,7 +252,4 @@ with right:
                             st.error(res["error"])
                         else:
                             append_assistant_message(res["text"])
-
-    # after form submitted, rerun updates show above automatically
-
-# End of page
+                            st.rerun()
