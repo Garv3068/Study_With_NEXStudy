@@ -7,36 +7,64 @@ import os
 st.set_page_config(page_title="AI Coding Studio", page_icon="💻", layout="wide")
 
 # ------------------------------------------------------------
-# ✅ GEMINI INITIALIZATION
+# ✅ GEMINI INITIALIZATION (ROBUST VERSION)
 # ------------------------------------------------------------
 @st.cache_resource
-def init_gemini():
-    # Try getting key from secrets, otherwise check environment variable
-    key = None
-    try:
-        key = st.secrets["GEMINI_API_KEY"]
-    except Exception:
-        pass
+def init_gemini(api_key_input):
+    # 1. Try getting key from the function argument (User Input)
+    key = api_key_input
 
+    # 2. If no user input, try getting from secrets safely
     if not key:
-        st.error("⚠️ GEMINI_API_KEY not found in Streamlit secrets.")
+        try:
+            key = st.secrets.get("GEMINI_API_KEY")
+        except Exception:
+            pass # Secrets file might not exist, just ignore
+
+    # 3. If still no key, return None (don't crash)
+    if not key:
         return None
 
     try:
         genai.configure(api_key=key)
-        # Using gemini-2.0-flash as it is currently the reliable preview model
         return genai.GenerativeModel("gemini-2.0-flash") 
     except Exception as e:
         st.error(f"Gemini initialization error: {e}")
         return None
 
-gemini_model = init_gemini()
+# ------------------------------------------------------------
+# SIDEBAR FOR API KEY
+# ------------------------------------------------------------
+with st.sidebar:
+    st.header("🔑 API Configuration")
+    # Check if key exists in secrets to decide if we show the warning
+    has_secret_key = False
+    try:
+        if st.secrets.get("GEMINI_API_KEY"):
+            has_secret_key = True
+    except:
+        pass
+
+    user_api_key = ""
+    if not has_secret_key:
+        st.warning("⚠️ No API Key found in secrets.")
+        user_api_key = st.text_input("Enter Gemini API Key:", type="password", placeholder="Paste key here...")
+        st.markdown("[Get a free key here](https://aistudio.google.com/app/apikey)")
+    else:
+        st.success("✅ API Key loaded from secrets")
+
+# Initialize Model
+gemini_model = init_gemini(user_api_key)
 
 # ------------------------------------------------------------
-# PAGE TITLE + TABS
+# PAGE CONTENT
 # ------------------------------------------------------------
 st.title("💻 AI Coding Studio")
 st.caption("Generate, debug, and learn to code — all in one place!")
+
+if not gemini_model:
+    st.error("❌ Please enter a valid Gemini API Key in the sidebar to continue.")
+    st.stop()
 
 tab1, tab2 = st.tabs(["⚙️ Code Generator", "🧠 Smart Debugger"])
 
@@ -57,10 +85,6 @@ with tab1:
             st.error("Please enter a prompt first.")
             st.stop()
 
-        if gemini_model is None:
-            st.error("Gemini model not initialized.")
-            st.stop()
-
         with st.spinner("✨ Writing code..."):
             try:
                 ai_prompt = f"""
@@ -76,12 +100,12 @@ with tab1:
 
                 response = gemini_model.generate_content(ai_prompt)
                 
-                # Clean up potential markdown fences if the model adds them anyway
+                # Clean up potential markdown fences
                 code_result = response.text.strip()
                 if code_result.startswith("```"):
                     lines = code_result.split("\n")
-                    # Remove first line (```python) and last line (```)
-                    code_result = "\n".join(lines[1:-1])
+                    if len(lines) > 2:
+                        code_result = "\n".join(lines[1:-1])
 
                 st.success(f"✅ Generated {lang} code:")
                 st.code(code_result, language=lang.lower())
@@ -112,11 +136,7 @@ with tab2:
             st.error("❌ Please paste some code to debug.")
             st.stop()
 
-        if gemini_model is None:
-            st.error("Gemini model not initialized.")
-            st.stop()
-
-        with st.spinner("🔍 Analyze and fixing..."):
+        with st.spinner("🔍 Analyzing and fixing..."):
             try:
                 prompt = f"""
                 You are an expert {debug_lang} programmer and debugger.
