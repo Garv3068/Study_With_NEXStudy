@@ -1,5 +1,12 @@
 import streamlit as st
 
+# ---------------- GOOGLE VERIFICATION CODE ----------------
+# Replace "YOUR_LONG_CODE_HERE" with the code from Google
+google_verification_code = """
+<meta name="google-site-verification" content="YOUR_LONG_CODE_HERE" />
+"""
+st.markdown(google-site-verification=XYcIyBJuua3DGj9HYfU0bpUVu9cGV1IczmvqjVuQcMA, unsafe_allow_html=True)
+# ----------------------------------------------------------
 st.set_page_config(
     page_title="NexStudy - Your AI Study Helper",
     page_icon="🧠",
