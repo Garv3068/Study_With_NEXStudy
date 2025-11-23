@@ -165,7 +165,7 @@ with tab1:
 
     # RIGHT: Player
     with col_output:
-        st.markdown("### 🎧 Podcast Player")
+        # st.markdown("### 🎧 Podcast Player")
         if st.session_state.audio_file_path:
             st.audio(st.session_state.audio_file_path, format="audio/mp3")
             with open(st.session_state.audio_file_path, "rb") as file:
@@ -173,8 +173,8 @@ with tab1:
             
             with st.expander("📜 View Script", expanded=False):
                 st.write(st.session_state.podcast_script)
-        else:
-            st.info("👈 Generate audio to listen here.")
+        # else:
+            # st.info("👈 Generate audio to listen here.")
 
 # =======================================================
 # TAB 2: AUDIO TO NOTES (TRANSCRIBER)
