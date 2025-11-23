@@ -257,7 +257,9 @@ with right:
 
         # ---------------- CHAT INPUT ----------------
         st.write("")
-        with st.form(key="chat_form", clear_on_submit=False):
+        # FIX: Changed clear_on_submit to True. 
+        # This clears the text area and file uploaders automatically after sending.
+        with st.form(key="chat_form", clear_on_submit=True):
             col_in, col_btn = st.columns([6, 1])
             with col_in:
                 user_input = st.text_area("Type your question...", height=80, key="u_in")
