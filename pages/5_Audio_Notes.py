@@ -105,7 +105,7 @@ if "transcription_result" not in st.session_state:
     st.session_state.transcription_result = ""
 
 # ---------------- TABS ----------------
-tab1, tab2 = st.tabs(["📝 Notes --> Audio (Podcaster)", "🎙️ Audio ➡️ Notes (Transcriber)"])
+tab1, tab2 = st.tabs(["📝 Notes -> Audio (Podcaster)", "🎙️ Audio -> Notes (Transcriber)"])
 
 # =======================================================
 # TAB 1: TEXT TO AUDIO (PODCASTER)
