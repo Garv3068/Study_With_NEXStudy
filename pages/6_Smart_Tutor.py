@@ -14,7 +14,7 @@ _logo_path = "/mnt/data/A_logo_for_EduNex,_an_AI-powered_smart_study_assis.png"
 if os.path.exists(_logo_path):
     st.image(_logo_path, width=150)
 
-st.title("🤖 NexStudy: AI Tutor & Doubt Solver")
+st.title("🤖 NexStudy: Smart AI Tutor ")
 st.caption("""
 **Your all-in-one study companion:** Ask questions, upload homework for solutions, get concept explanations, or generate quizzes from your notes.
 """)
