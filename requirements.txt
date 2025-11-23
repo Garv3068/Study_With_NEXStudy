@@ -26,3 +26,4 @@ duckduckgo-search
 google-generativeai
 openai
 pytesseract
+gTTs
