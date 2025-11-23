@@ -16,9 +16,11 @@ st.set_page_config(page_title="Audio Notes", page_icon="🎧", layout="wide")
 st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
 
 # Optional logo
-_logo_path = "/mnt/data/A_logo_for_EduNex,_an_AI-powered_smart_study_assis.png"
-if os.path.exists(_logo_path):
-    st.image(_logo_path, width=150)
+# _logo_path = "/mnt/data/A_logo_for_EduNex,_an_AI-powered_smart_study_assis.png"
+# if os.path.exists(_logo_path):
+    # st.image(_logo_path, width=150)
+if os.path.exists("image.png"):
+    st.image("image.png", width=200)
 
 st.title("🎧 Audio Notes Studio")
 st.caption("Convert text to audio podcasts OR transcribe lecture recordings into notes.")
