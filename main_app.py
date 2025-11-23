@@ -1,8 +1,8 @@
 import streamlit as st
-from PIL import Image
+# from PIL import Image
 
-logo = Image.open("assets/image.png")
-st.sidebar.image(logo, use_column_width=True)
+# logo = Image.open("assets/image.png")
+# st.sidebar.image(logo, use_column_width=True)
 # # ---------------- GOOGLE VERIFICATION CODE ----------------
 # # Replace "YOUR_LONG_CODE_HERE" with the code from Google
 # google_verification_code = """
