@@ -20,24 +20,40 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ---------------- Logo & Hero Section ----------------
 # Ensure 'logo.jpg' is in the same directory
+import streamlit as st
+import os
+
 logo_path = "assets/image.png"
 
 col_logo, col_title = st.columns([1.5, 4.5])
 
 with col_logo:
     if os.path.exists(logo_path):
-        st.image(logo_path, width=200)
+        st.markdown(
+            f"""
+            <style>
+                .round-logo {{
+                    border-radius: 50%;
+                    width: 200px;
+                    height: 200px;
+                    object-fit: cover;
+                }}
+            </style>
+            <img src="{logo_path}" class="round-logo">
+            """,
+            unsafe_allow_html=True,
+        )
     else:
-        st.write("🧠") # Fallback icon if logo is missing
+        st.markdown("<h1 style='text-align: center;'>🧠</h1>", unsafe_allow_html=True)
 
 with col_title:
     st.title("NexStudy")
-    st.subheader("The Unlimited, Free AI Academic Companion")
+    st.write("### The Unlimited, Free AI Academic Companion")
     st.markdown(
         """
-        **Tired of running out of credits on other apps?** 
-        NexStudy is open, private, and unlimited..
-        
+        **Tired of running out of credits on other apps?**  
+        NexStudy is open, private, and unlimited...
+
         🚀 **Solver** · 📅 **Planner** · 🎧 **Audio Notes** · 💻 **Coding**
         """
     )
