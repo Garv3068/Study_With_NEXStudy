@@ -83,12 +83,12 @@ def extract_text_from_pdf(uploaded_file) -> str:
         st.error(f"PDF extraction error: {e}")
         return ""
 
-def call_gemini(prompt: str) -> dict:
+def call_gemini(prompt: str, generation_config=None) -> dict:
     """Safe wrapper to call gemini and return dict with keys 'text' or 'error'"""
     if gemini_model is None:
         return {"error": "Gemini model not initialized. Provide API key in sidebar or set it in secrets."}
     try:
-        resp = gemini_model.generate_content(prompt)
+        resp = gemini_model.generate_content(prompt, generation_config=generation_config)
         return {"text": resp.text or ""}
     except Exception as e:
         return {"error": str(e)}
@@ -275,7 +275,8 @@ if 'generate' in locals() and generate:
             
             # Call Gemini
             with st.spinner("Generating plan (Pro AI)..."):
-                res = call_gemini(prompt)
+                # Enforce JSON mode for reliability
+                res = call_gemini(prompt, generation_config={"response_mime_type": "application/json"})
                 if res.get("error"):
                     st.error(f"AI Error: {res['error']}")
                 else:
@@ -294,7 +295,8 @@ if 'generate' in locals() and generate:
                             first = min([i for i in [raw.find('{'), raw.find('[')] if i != -1])
                             parsed = json.loads(raw[first:])
                         except Exception as e:
-                            st.error("Failed to parse AI output as JSON.")
+                            st.error("Failed to parse AI output as JSON. Raw output:")
+                            st.code(raw)
                             parsed = None
 
                     if parsed:
