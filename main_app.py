@@ -1,60 +1,121 @@
 import streamlit as st
-# from PIL import Image
+import os
 
-# logo = Image.open("assets/image.png")
-# st.sidebar.image(logo, use_column_width=True)
-# # ---------------- GOOGLE VERIFICATION CODE ----------------
-# # Replace "YOUR_LONG_CODE_HERE" with the code from Google
-# google_verification_code = """
-# <meta name="google-site-verification" content="YOUR_LONG_CODE_HERE" />
-# """
-# st.markdown(google-site-verification=XYcIyBJuua3DGj9HYfU0bpUVu9cGV1IczmvqjVuQcMA, unsafe_allow_html=True)
-# # ----------------------------------------------------------
+# ---------------- Page Config (SEO Optimized) ----------------
 st.set_page_config(
-    page_title="NexStudy - Your AI Study Helper",
+    page_title="NexStudy | Free AI Tutor & Exam Solver",
     page_icon="🧠",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
+# ---------------- Custom CSS (Optional: Clean up UI) ----------------
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# --- Main Home Content ---
-st.title("🎓 Welcome to NexStudy – Your AI Study Helper")
-st.markdown("""
-NexStudy empowers students with AI-driven learning tools.  
-🚀 Learn smarter, not harder.
-""")
+# ---------------- Logo & Hero Section ----------------
+# Ensure 'logo.jpg' is in the same directory
+logo_path = "logo.jpg"
 
-st.markdown("---")
+col_logo, col_title = st.columns([1, 4])
 
-col1, col2, col3 = st.columns(3)
+with col_logo:
+    if os.path.exists(logo_path):
+        st.image(logo_path, width=250)
+    else:
+        st.write("🧠") # Fallback icon if logo is missing
 
+with col_title:
+    st.title("NexStudy")
+    st.subheader("The Unlimited, Free AI Academic Companion")
+    st.markdown(
+        """
+        **Tired of running out of credits on other apps?** NexStudy is open, private, and unlimited. Bring your own free API Key and study without limits.
+        
+        🚀 **Solver** · 📅 **Planner** · 🎧 **Audio Notes** · 💻 **Coding**
+        """
+    )
+
+st.divider()
+
+# ---------------- Feature Grid ----------------
+st.markdown("### 🚀 What can you do here?")
+
+col1, col2 = st.columns(2)
+
+# --- Left Column Features ---
 with col1:
-    st.header("🧾 Summarize Notes")
-    st.write("Upload PDFs or text to generate AI-powered summaries.")
-    st.page_link("pages/1_Summarizer.py", label="Go to Summarizer", icon="➡️")
+    st.markdown(
+        """
+        #### 🤖 **NexStudy Chat**
+        The core of your learning.
+        - **Doubt Solver:** Upload homework images/PDFs.
+        - **Topic Explainer:** Get deep dives into complex concepts.
+        - **Tutor Mode:** Ask follow-up questions freely (Context Aware).
+        """
+    )
+    st.info("👈 **Go to: NexStudy** in the sidebar")
 
+    st.markdown(
+        """
+        #### 📅 **Study Planner**
+        Never miss a deadline again.
+        - Upload your syllabus PDF.
+        - Set your exam date.
+        - Get a **day-by-day** optimized schedule.
+        """
+    )
+    st.info("👈 **Go to: Study Planner** in the sidebar")
+    
+    st.markdown(
+        """
+        #### 💻 **AI Coding Studio**
+        Master programming effortlessly.
+        - Generate Python, HTML, JS code.
+        - **AI Debugger:** Find and fix errors instantly.
+        """
+    )
+    st.info("👈 **Go to: AI Coding Studio** in the sidebar")
+
+# --- Right Column Features ---
 with col2:
-    st.header("🧠 Generate Quizzes")
-    st.write("Turn your notes into interactive quizzes and test yourself.")
-    st.page_link("pages/2_Quiz_Generator.py", label="Go to Quiz Generator", icon="➡️")
+    st.markdown(
+        """
+        #### 📝 **Past Paper Solver**
+        The ultimate exam hack.
+        - Upload previous year question papers.
+        - Get full **Answer Keys** and step-by-step solutions.
+        """
+    )
+    st.info("👈 **Go to: Paper Solver** in the sidebar")
 
-with col3:
-    st.header("💡 Smart Study Tips")
-    st.write("Boost productivity with AI-generated study hacks.")
-    st.page_link("pages/Smart_Tips.py", label="Get Tips", icon="➡️")
+    st.markdown(
+        """
+        #### 🎧 **Audio Notes Studio**
+        Study while you walk.
+        - **Podcaster:** Turn PDF notes into audio summaries.
+        - **Transcriber:** Turn lecture recordings into text notes.
+        """
+    )
+    st.info("👈 **Go to: Audio Notes** in the sidebar")
 
-st.markdown("---")
+st.divider()
 
-col4, col5 = st.columns(2)
-with col4:
-    st.header("🗂️ Flashcards")
-    st.write("Quickly review key points using auto-generated flashcards.")
-    st.page_link("pages/Flashcards.py", label="Open Flashcards", icon="➡️")
+# ---------------- Footer / Getting Started ----------------
+# st.markdown("### ⚡ Getting Started")
+# st.markdown(
+    # """
+    # 1. **Get a Gemini API Key:** It's free! [Get it here](https://aistudio.google.com/app/apikey).
+    # 2. **Enter it in the Sidebar:** Paste it once, and it works for all tools.
+    # 3. **Select a Tool:** Choose what you need from the menu on the left.
+    # """
+# )
 
-with col5:
-    st.header("📊 Dashboard")
-    st.write("Track your quiz performance and progress over time.")
-    st.page_link("pages/3_Dashboard.py", label="Open Dashboard", icon="➡️")
-
+# st.warning("🔒 Your API Key is safe. It is not stored anywhere and is only used for your session.")
 st.markdown("---")
 st.caption("✨ Built with ❤️ by Garv | Powered by AI | NexStudy 2025")
