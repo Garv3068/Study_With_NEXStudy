@@ -20,11 +20,6 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ---------------- Logo & Hero Section ----------------
 # Ensure 'logo.jpg' is in the same directory
-import streamlit as st
-import os
-
-import streamlit as st
-import os
 
 logo_path = "assets/image.png"
 
