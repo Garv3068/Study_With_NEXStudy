@@ -1,65 +1,83 @@
+# pages/AI_Study_Planner_Pro.py
 import streamlit as st
 import google.generativeai as genai
 import pdfplumber
 import os
 import datetime
-from datetime import date
+import io
+import json
+from datetime import date, timedelta
 
 # ---------------- Page config ----------------
-st.set_page_config(page_title="AI Study Planner", page_icon="📅", layout="wide")
+st.set_page_config(page_title="NexStudy — Study Planner Pro", page_icon="📅", layout="wide")
 st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
 
-# ---------------- Logo Logic ----------------
-if os.path.exists("logo.png"):
-    st.image("logo.png", width=200)
-elif os.path.exists("logo.jpg"):
-    st.image("logo.jpg", width=200)
+# ---------------- Logo (from uploaded path) ----------------
+LOGO_PATH = "/mnt/data/A_logo_for_EduNex,_an_AI-powered_smart_study_assis.png"
+if os.path.exists(LOGO_PATH):
+    st.image(LOGO_PATH, width=180)
 
-st.title("📅 AI Study Planner")
-st.caption("Upload your syllabus, set your exam date, and get a perfectly optimized study schedule.")
+st.title("📅 NexStudy — Study Planner (Pro)")
+st.write("Pro features: save/load plans, intensity control, ICS export, weekly overview, and premium model option.")
 
-# ---------------- Gemini Initialization ----------------
+# ---------------- Ensure storage folder ----------------
+SAVE_DIR = "/mnt/data/nexstudy_plans"
+os.makedirs(SAVE_DIR, exist_ok=True)
+
+# ---------------- Gemini Initialization (Pro-first, fallback) ----------------
 @st.cache_resource
-def init_gemini(api_key_input):
-    key = api_key_input
-    if not key:
+def init_gemini(api_key_input: str | None = None):
+    key = None
+    # prefer input key, else secrets
+    if api_key_input:
+        key = api_key_input
+    else:
         try:
             key = st.secrets.get("GEMINI_API_KEY")
         except Exception:
-            pass
-    
+            key = None
+
     if not key:
         return None
 
     try:
         genai.configure(api_key=key)
-        return genai.GenerativeModel("gemini-2.0-flash")
+        # try pro model first
+        try:
+            return genai.GenerativeModel("gemini-2.5-flash")
+        except Exception:
+            # fallback to 2.0 flash or 1.5
+            try:
+                return genai.GenerativeModel("gemini-2.0-flash")
+            except Exception:
+                return genai.GenerativeModel("gemini-1.5-flash")
     except Exception as e:
         st.error(f"Gemini initialization error: {e}")
         return None
 
-# ---------------- Sidebar ----------------
+# ---------------- Sidebar: Sign-in & Settings ----------------
 with st.sidebar:
-    st.header("⚙️ Settings")
-    
-    has_secret_key = False
-    try:
-        if st.secrets.get("GEMINI_API_KEY"):
-            has_secret_key = True
-    except:
-        pass
+    st.header("👤 Account / Settings (Pro)")
+    email = st.text_input("Email (used to save/load plans):", key="planner_email")
+    st.write("— or leave blank to use local session only —")
+    st.markdown("---")
 
-    user_api_key = ""
-    if not has_secret_key:
-        st.warning("⚠️ No API Key found.")
-        user_api_key = st.text_input("Enter Gemini API Key:", type="password")
-    else:
-        st.success("✅ API Key loaded")
+    st.header("🔑 API Key (optional)")
+    # allow pasting key ad-hoc (overrides secrets)
+    api_key_input = st.text_input("Paste Gemini API key (optional):", type="password")
+    st.markdown("If you have a key and want to use Pro model, paste it here; otherwise set `GEMINI_API_KEY` in Streamlit secrets.")
+    st.markdown("---")
 
-gemini_model = init_gemini(user_api_key)
+    st.header("⚙️ Planner Options")
+    model_pref = st.selectbox("Model preference:", ["Auto (best available)", "gemini-2.5-flash (Pro)", "gemini-2.0-flash", "gemini-1.5-flash"])
+    st.checkbox("Enable verbose plan (more detail)", value=True, key="verbose_plan")
+    st.markdown("---")
+    st.info("Plans are saved locally in the app server under /mnt/data/nexstudy_plans when you Save (email required).")
 
-# ---------------- Helpers ----------------
-def extract_text_from_pdf(uploaded_file):
+gemini_model = init_gemini(api_key_input if api_key_input else None)
+
+# ---------------- Helper functions ----------------
+def extract_text_from_pdf(uploaded_file) -> str:
     try:
         text = ""
         with pdfplumber.open(uploaded_file) as pdf:
@@ -69,104 +87,278 @@ def extract_text_from_pdf(uploaded_file):
                     text += page_text + "\n\n"
         return text.strip()
     except Exception as e:
-        st.error(f"Error extracting PDF text: {e}")
+        st.error(f"PDF extraction error: {e}")
         return ""
 
-# ---------------- Session State ----------------
-if "study_plan" not in st.session_state:
-    st.session_state.study_plan = ""
+def call_gemini(prompt: str, max_tokens: int = 1200) -> dict:
+    """Safe wrapper to call gemini and return dict with keys 'text' or 'error'"""
+    if gemini_model is None:
+        return {"error": "Gemini model not initialized. Provide API key in sidebar or set it in secrets."}
+    try:
+        resp = gemini_model.generate_content(prompt)
+        return {"text": resp.text or ""}
+    except Exception as e:
+        return {"error": str(e)}
 
-# ---------------- Layout ----------------
-col_config, col_plan = st.columns([1, 2])
+def generate_plan_markdown(plan_meta: dict, day_plan: list[str]) -> str:
+    """Create full markdown text of the plan"""
+    header = f"# NexStudy — Study Plan for {plan_meta.get('name','Student')}\n\n"
+    header += f"- Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+    header += f"- Exam date: {plan_meta['exam_date']}\n"
+    header += f"- Days left: {plan_meta['days_left']}\n"
+    header += f"- Daily study hours: {plan_meta['daily_hours']} hours\n"
+    header += f"- Intensity: {plan_meta['intensity']}\n\n"
+    header += "## Motivational Quote\n\n"
+    header += f"> {plan_meta.get('quote','Stay consistent — small daily wins add up!')}\n\n"
+    header += "## Day-by-day Plan\n\n"
+    header += "| Day | Date | Topic | Activity |\n|---|---:|---|---|\n"
+    for idx, day in enumerate(day_plan, start=1):
+        header += f"| Day {idx} | {day['date']} | {day['topic']} | {day['activity']} |\n"
+    header += "\n\n## Strategy for Success\n"
+    header += "\n".join([f"- {p}" for p in plan_meta.get("strategy", [])])
+    return header
 
-# ---------------- LEFT COLUMN: Configuration ----------------
-with col_config:
-    st.markdown("### ⚙️ Plan Details")
-    
-    with st.form("planner_form"):
-        # Syllabus Input
-        syllabus_type = st.radio("Syllabus Source:", ["Paste Text", "Upload PDF"])
-        
+def save_plan_to_disk(email: str, plan_data: dict) -> str:
+    """Saves the plan JSON to SAVE_DIR and returns filepath"""
+    safe_email = email.replace("@","_at_").replace(".","_")
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"plan_{safe_email}_{timestamp}.json"
+    path = os.path.join(SAVE_DIR, filename)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(plan_data, f, indent=2)
+    return path
+
+def list_saved_plans(email: str) -> list:
+    """Return list of saved plan files for this email (sorted newest first)"""
+    files = []
+    safe = email.replace("@","_at_").replace(".","_")
+    for fname in os.listdir(SAVE_DIR):
+        if fname.startswith(f"plan_{safe}_"):
+            files.append(os.path.join(SAVE_DIR, fname))
+    files.sort(reverse=True)
+    return files
+
+def load_plan_from_file(path: str) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def create_ics(plan_meta: dict, day_plan: list[dict]) -> str:
+    """Return content for an .ics file (string) representing daily study events."""
+    # Basic iCalendar format
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        f"PRODID:-//NexStudy//StudyPlannerPro//EN"
+    ]
+    for idx, d in enumerate(day_plan, start=1):
+        dt = datetime.datetime.strptime(d["date"], "%Y-%m-%d")
+        dtstart = dt.strftime("%Y%m%d")
+        uid = f"nexstudy-{plan_meta.get('email','local')}-{idx}"
+        lines += [
+            "BEGIN:VEVENT",
+            f"UID:{uid}",
+            f"DTSTAMP:{datetime.datetime.now().strftime('%Y%m%dT%H%M%SZ')}",
+            f"DTSTART;VALUE=DATE:{dtstart}",
+            f"SUMMARY:Study: {d['topic']}",
+            f"DESCRIPTION:{d['activity']}",
+            "END:VEVENT"
+        ]
+    lines.append("END:VCALENDAR")
+    return "\n".join(lines)
+
+# ---------------- UI: Planner form ----------------
+col_left, col_right = st.columns([1.1, 1.9])
+
+with col_left:
+    st.subheader("Plan configuration")
+    with st.form("planner_pro_form"):
+        name = st.text_input("Your name (optional):")
+        syllabus_source = st.radio("Syllabus input:", ["Paste text", "Upload PDF"], index=0)
         syllabus_text = ""
-        if syllabus_type == "Paste Text":
-            syllabus_text = st.text_area("Paste Topics/Chapters:", height=150, placeholder="1. Algebra\n2. Calculus\n3. Thermodynamics...")
+        uploaded_file = None
+        if syllabus_source == "Paste text":
+            syllabus_text = st.text_area("Paste chapters/topics (one per line):", height=180,
+                                        placeholder="1. Algebra\n2. Calculus\n3. Coordinate Geometry")
         else:
-            uploaded_file = st.file_uploader("Upload Syllabus PDF:", type=["pdf"])
-        
-        # Dates
-        today = date.today()
-        exam_date = st.date_input("Exam Date:", min_value=today + datetime.timedelta(days=1))
-        
-        # Preferences
-        daily_hours = st.slider("Daily Study Hours:", 1, 12, 4)
-        focus_areas = st.text_input("Weak Areas (Focus more on):", placeholder="e.g. Organic Chemistry")
-        
-        generate_btn = st.form_submit_button("🚀 Generate Plan")
+            uploaded_file = st.file_uploader("Upload syllabus PDF (≤ 10 MB):", type=["pdf"])
+        today_dt = date.today()
+        exam_dt = st.date_input("Exam date:", min_value=today_dt + timedelta(days=1))
+        daily_hours = st.slider("Daily study hours:", 1, 12, 4)
+        intensity = st.selectbox("Intensity:", ["Light (easier pace)", "Normal", "Intensive (more practice)"])
+        focus_areas = st.text_input("Focus areas (comma separated):", placeholder="e.g. Organic Chemistry, Integration")
+        prefer_review_days = st.number_input("Reserve days before exam for revision:", min_value=0, max_value=30, value=7)
+        generate = st.form_submit_button("🚀 Generate Pro Plan")
 
-    if generate_btn:
-        final_syllabus = syllabus_text
-        if syllabus_type == "Upload PDF" and uploaded_file:
-            final_syllabus = extract_text_from_pdf(uploaded_file)
-        
-        if not final_syllabus:
-            st.warning("Please provide a syllabus (text or PDF).")
+    st.markdown("---")
+    st.subheader("Saved Plans")
+    if email:
+        files = list_saved_plans(email)
+        if files:
+            sel = st.selectbox("Load a saved plan:", ["-- select saved plan --"] + files)
+            if sel and sel != "-- select saved plan --":
+                if st.button("Load selected plan"):
+                    loaded = load_plan_from_file(sel)
+                    st.session_state["loaded_plan"] = loaded
+                    st.success("Loaded plan into view.")
         else:
-            if gemini_model:
-                with st.spinner("Creating your master plan..."):
-                    # Calculate days
-                    days_left = (exam_date - today).days
-                    
-                    prompt = f"""
-                    Act as an expert study strategist. Create a detailed day-by-day study schedule.
-                    
-                    **Constraints:**
-                    - Days remaining: {days_left} days
-                    - Daily study time: {daily_hours} hours
-                    - Focus areas (give more time to these): {focus_areas}
-                    
-                    **Syllabus:**
-                    {final_syllabus[:10000]} (truncated if too long)
-                    
-                    **Output Format:**
-                    Start with a motivational quote.
-                    Then provide a structured Markdown table:
-                    | Day | Date | Topic to Cover | Activity (Read/Practice/Revise) |
-                    |---|---|---|---|
-                    | Day 1 | {today} | ... | ... |
-                    
-                    After the table, provide 3 bullet points on "Strategy for Success".
-                    """
-                    
-                    try:
-                        response = gemini_model.generate_content(prompt)
-                        st.session_state.study_plan = response.text
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-            else:
-                st.error("API Key missing.")
-
-# ---------------- RIGHT COLUMN: The Plan ----------------
-with col_plan:
-    if st.session_state.study_plan:
-        st.markdown("### 🗓️ Your Personalized Schedule")
-        
-        # Display the plan
-        st.markdown(st.session_state.study_plan)
-        
-        st.markdown("---")
-        st.download_button(
-            label="📥 Download Plan as Markdown",
-            data=st.session_state.study_plan,
-            file_name="Study_Plan.md",
-            mime="text/markdown"
-        )
+            st.info("No saved plans found for this email.")
     else:
-        st.info("👈 Fill in the details on the left to generate your schedule.")
-        
-        st.markdown("""
-        ### How it works:
-        1. **Analyze:** The AI reads your syllabus and identifies key topics.
-        2. **Prioritize:** It allocates more time to your weak areas.
-        3. **Schedule:** It spreads topics evenly across the days leading up to your exam.
-        """)
+        st.info("Sign in with an email to save/load plans.")
+
+with col_right:
+    st.subheader("Plan preview / results")
+    # If a plan has been loaded externally, show that
+    if st.session_state.get("loaded_plan"):
+        plan_obj = st.session_state.get("loaded_plan")
+        md = plan_obj.get("markdown", "")
+        st.markdown("### Loaded plan")
+        st.markdown(md)
+        if st.download_button("Download loaded plan (MD)", data=md, file_name="loaded_plan.md", mime="text/markdown"):
+            st.success("Downloaded.")
+        # Offer ICS too if present
+        if st.button("Download loaded plan as ICS"):
+            ics_content = create_ics(plan_obj.get("meta",{}), plan_obj.get("days", []))
+            st.download_button("Download ICS", data=ics_content, file_name="loaded_plan.ics", mime="text/calendar")
+    else:
+        # Show instructions or existing session plan
+        if "session_plan_markdown" in st.session_state:
+            st.markdown("### Current generated plan (unsaved)")
+            st.markdown(st.session_state["session_plan_markdown"])
+        else:
+            st.info("After you fill the configuration and click Generate, the plan will appear here.")
+
+# ---------------- Generate plan logic ----------------
+if 'generate' in locals() and generate:
+    # Prepare final syllabus text
+    final_syllabus = syllabus_text
+    if syllabus_source == "Upload PDF" and uploaded_file:
+        final_syllabus = extract_text_from_pdf(uploaded_file)
+    if not final_syllabus or final_syllabus.strip() == "":
+        st.warning("Please provide a syllabus (paste text or upload a PDF).")
+    else:
+        # Calculate days left
+        days_left = (exam_dt - today_dt).days
+        if days_left <= (prefer_review_days + 1):
+            st.warning("Too few days left for the selected revision days. Reduce revision days or choose later exam date.")
+        else:
+            # Prepare prompt for Gemini
+            topics = [t.strip() for t in final_syllabus.splitlines() if t.strip()]
+            # if not many topics, attempt to split by punctuation
+            if not topics or len(topics) < 3:
+                # split by comma/semicolon as fallback
+                topics = [t.strip() for t in final_syllabus.replace("\n",",").split(",") if t.strip()]
+
+            plan_meta = {
+                "name": name or "Student",
+                "email": email or "local",
+                "exam_date": exam_dt.strftime("%Y-%m-%d"),
+                "days_left": days_left,
+                "daily_hours": daily_hours,
+                "intensity": intensity,
+                "focus_areas": [f.strip() for f in focus_areas.split(",") if f.strip()],
+            }
+
+            # Formulate the prompt (kept reasonably sized)
+            prompt = f"""
+You are an expert study strategist. Create a day-by-day study plan given the following constraints.
+
+Syllabus topics (short list):
+{json.dumps(topics[:200], ensure_ascii=False)}
+
+Exam date: {exam_dt.strftime('%Y-%m-%d')}
+Days remaining: {days_left}
+Daily study hours: {daily_hours}
+Intensity: {intensity}
+Reserve {prefer_review_days} days at the end for revision.
+Focus areas (prioritize these): {plan_meta['focus_areas']}
+
+Output a JSON with:
+- "quote": motivational short sentence
+- "strategy": list of 3 quick bullet points
+- "days": list of objects with keys: "date" (YYYY-MM-DD), "topic", "activity" (Read/Practice/Revise), "duration_hours"
+Return only JSON.
+"""
+            # Call Gemini
+            with st.spinner("Generating plan (Pro AI)..."):
+                res = call_gemini(prompt)
+                if res.get("error"):
+                    st.error(f"AI Error: {res['error']}")
+                else:
+                    # Attempt to parse JSON from AI output safely
+                    raw = res["text"].strip()
+                    # strip code fences if present
+                    if raw.startswith("```"):
+                        raw = raw.split("```",2)[-1].strip()
+                    try:
+                        parsed = json.loads(raw)
+                    except Exception:
+                        # fallback: attempt to find first { and parse
+                        try:
+                            first = min([i for i in [raw.find('{'), raw.find('[')] if i != -1])
+                            parsed = json.loads(raw[first:])
+                        except Exception as e:
+                            st.error("Failed to parse AI output as JSON. Raw output shown below.")
+                            st.code(raw)
+                            parsed = None
+
+                    if parsed:
+                        # Compose day plan markdown and meta
+                        days = parsed.get("days", [])
+                        # limit days to days_left
+                        days = days[:days_left]
+                        plan_meta["quote"] = parsed.get("quote", "Stay consistent — small daily wins add up.")
+                        plan_meta["strategy"] = parsed.get("strategy", ["Focus on weak areas","Practice daily","Revise last week"])
+
+                        md_days = []
+                        for d in days:
+                            # normalize minimal fields
+                            dt = d.get("date")
+                            topic = d.get("topic", "Miscellaneous")
+                            activity = d.get("activity", "Read/Practice")
+                            duration = d.get("duration_hours", plan_meta["daily_hours"])
+                            md_days.append({"date": dt, "topic": topic, "activity": activity, "duration_hours": duration})
+
+                        md_text = generate_plan_markdown({"name": plan_meta["name"], "exam_date": plan_meta["exam_date"],
+                                                          "days_left": plan_meta["days_left"], "daily_hours": plan_meta["daily_hours"],
+                                                          "intensity": plan_meta["intensity"], "strategy": plan_meta["strategy"],
+                                                          "quote": plan_meta.get("quote")}, md_days)
+
+                        # store in session_state
+                        st.session_state["session_plan_meta"] = plan_meta
+                        st.session_state["session_plan_days"] = md_days
+                        st.session_state["session_plan_markdown"] = md_text
+
+                        # show plan
+                        st.success("✅ Plan generated.")
+                        st.experimental_rerun()
+
+# ---------------- Actions: Save, Export, ICS ----------------
+if st.session_state.get("session_plan_markdown"):
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Plan Actions")
+    if email:
+        if st.sidebar.button("Save Plan (to server)"):
+            plan_package = {
+                "meta": st.session_state.get("session_plan_meta", {}),
+                "days": st.session_state.get("session_plan_days", []),
+                "markdown": st.session_state.get("session_plan_markdown", "")
+            }
+            saved_path = save_plan_to_disk(email, plan_package)
+            st.sidebar.success(f"Saved to {saved_path}")
+    # Download markdown
+    st.sidebar.download_button("Download Plan (MD)", data=st.session_state["session_plan_markdown"],
+                               file_name="NexStudy_Plan.md", mime="text/markdown")
+    # Download ICS
+    if st.sidebar.button("Download Plan (ICS)"):
+        ics = create_ics(st.session_state.get("session_plan_meta", {}), st.session_state.get("session_plan_days", []))
+        st.sidebar.download_button("Download ICS file", data=ics, file_name="NexStudy_Plan.ics", mime="text/calendar")
+        st.sidebar.success("ICS generated (download button available above).")
+
+# ---------------- Display generated plan in main area if present ----------------
+if st.session_state.get("session_plan_markdown"):
+    st.markdown("### 🗓️ Your Generated Pro Plan")
+    st.markdown(st.session_state["session_plan_markdown"])
+else:
+    st.info("Fill the left form and click Generate to create a Pro study plan.")
+
+# ---------------- End of file ----------------
