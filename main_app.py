@@ -23,6 +23,9 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 import streamlit as st
 import os
 
+import streamlit as st
+import os
+
 logo_path = "assets/image.png"
 
 col_logo, col_title = st.columns([1.5, 4.5])
@@ -32,14 +35,17 @@ with col_logo:
         st.markdown(
             f"""
             <style>
-                .round-logo {{
+                .circular-logo {{
                     border-radius: 50%;
                     width: 200px;
                     height: 200px;
                     object-fit: cover;
+                    display: block;
+                    margin-left: auto;
+                    margin-right: auto;
                 }}
             </style>
-            <img src="{logo_path}" class="round-logo">
+            <img src="{logo_path}" class="circular-logo">
             """,
             unsafe_allow_html=True,
         )
@@ -59,7 +65,6 @@ with col_title:
     )
 
 st.divider()
-
 # ---------------- Feature Grid ----------------
 st.markdown("### 🚀 What can you do here?")
 
