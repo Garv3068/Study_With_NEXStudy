@@ -22,7 +22,7 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # Ensure 'logo.jpg' is in the same directory
 logo_path = "assets/image.png"
 
-col_logo, col_title = st.columns([0.5, 4])
+col_logo, col_title = st.columns([2, 4])
 
 with col_logo:
     if os.path.exists(logo_path):
