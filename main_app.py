@@ -35,7 +35,8 @@ with col_title:
     st.subheader("The Unlimited, Free AI Academic Companion")
     st.markdown(
         """
-        **Tired of running out of credits on other apps?** NexStudy is open, private, and unlimited. Bring your own free API Key and study without limits.
+        **Tired of running out of credits on other apps?** 
+        NexStudy is open, private, and unlimited..
         
         🚀 **Solver** · 📅 **Planner** · 🎧 **Audio Notes** · 💻 **Coding**
         """
