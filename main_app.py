@@ -20,7 +20,7 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ---------------- Logo & Hero Section ----------------
 # Ensure 'logo.jpg' is in the same directory
-logo_path = "logo.jpg"
+logo_path = "image.png"
 
 col_logo, col_title = st.columns([1, 4])
 
