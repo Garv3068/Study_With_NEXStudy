@@ -22,11 +22,11 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # Ensure 'logo.jpg' is in the same directory
 logo_path = "assets/image.png"
 
-col_logo, col_title = st.columns([1, 4])
+col_logo, col_title = st.columns([0.5, 4])
 
 with col_logo:
     if os.path.exists(logo_path):
-        st.image(logo_path, width=250)
+        st.image(logo_path, width=200)
     else:
         st.write("🧠") # Fallback icon if logo is missing
 
