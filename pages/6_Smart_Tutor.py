@@ -38,7 +38,7 @@ def init_gemini(api_key_input):
 
 # ---------------- Sidebar ----------------
 with st.sidebar:
-    st.header("⚙️ Settings")
+    # st.header("⚙️ Settings")
     
     has_secret_key = False
     try:
@@ -51,8 +51,8 @@ with st.sidebar:
     if not has_secret_key:
         st.warning("⚠️ No API Key found.")
         user_api_key = st.text_input("Enter Gemini API Key:", type="password")
-    else:
-        st.success("✅ API Key loaded")
+    # else:
+        # st.success("✅ API Key loaded")
 
 gemini_model = init_gemini(user_api_key)
 
