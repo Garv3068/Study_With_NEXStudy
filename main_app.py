@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import base64
 
 # ---------------- Page Config (SEO Optimized) ----------------
 st.set_page_config(
@@ -18,15 +19,30 @@ hide_streamlit_style = """
             """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# ---------------- Logo & Hero Section ----------------
-# Ensure 'logo.jpg' is in the same directory
+# ---------------- Helper: Load Image as Base64 ----------------
+def get_img_as_base64(file_path):
+    with open(file_path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
 
-logo_path = "assets/image.png"
+# ---------------- Logo & Hero Section ----------------
+# Check for path preference: assets/image.png -> logo.png -> logo.jpg
+if os.path.exists("assets/image.png"):
+    logo_path = "assets/image.png"
+elif os.path.exists("logo.png"):
+    logo_path = "logo.png"
+elif os.path.exists("logo.jpg"):
+    logo_path = "logo.jpg"
+else:
+    logo_path = None
 
 col_logo, col_title = st.columns([1.5, 4.5])
 
 with col_logo:
-    if os.path.exists(logo_path):
+    if logo_path and os.path.exists(logo_path):
+        # Convert image to base64 so it works in the HTML img tag
+        img_b64 = get_img_as_base64(logo_path)
+        
         st.markdown(
             f"""
             <style>
@@ -38,9 +54,10 @@ with col_logo:
                     display: block;
                     margin-left: auto;
                     margin-right: auto;
+                    border: 3px solid #f0f2f6; /* Optional border for clean look */
                 }}
             </style>
-            <img src="{logo_path}" class="circular-logo">
+            <img src="data:image/png;base64,{img_b64}" class="circular-logo">
             """,
             unsafe_allow_html=True,
         )
@@ -52,14 +69,14 @@ with col_title:
     st.write("### The Unlimited, Free AI Academic Companion")
     st.markdown(
         """
-        **Tired of running out of credits on other apps?**  
-        NexStudy is open, private, and unlimited...
+        **Tired of running out of credits on other apps?** NexStudy is open, private, and unlimited. Bring your own free API Key and study without limits.
 
         🚀 **Solver** · 📅 **Planner** · 🎧 **Audio Notes** · 💻 **Coding**
         """
     )
 
 st.divider()
+
 # ---------------- Feature Grid ----------------
 st.markdown("### 🚀 What can you do here?")
 
@@ -123,15 +140,9 @@ with col2:
 
 st.divider()
 
-# ---------------- Footer / Getting Started ----------------
-# st.markdown("### ⚡ Getting Started")
-# st.markdown(
-    # """
-    # 1. **Get a Gemini API Key:** It's free! [Get it here](https://aistudio.google.com/app/apikey).
-    # 2. **Enter it in the Sidebar:** Paste it once, and it works for all tools.
-    # 3. **Select a Tool:** Choose what you need from the menu on the left.
-    # """
-# )
+# ---------------- Footer ----------------
+st.markdown("---")
+st.caption("✨ Built with ❤️ by Garv | Powered by AI | NexStudy 2025")
 
 # st.warning("🔒 Your API Key is safe. It is not stored anywhere and is only used for your session.")
 st.markdown("---")
