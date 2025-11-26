@@ -36,7 +36,7 @@ def init_gemini(api_key_input):
 # SIDEBAR FOR API KEY
 # ------------------------------------------------------------
 with st.sidebar:
-    st.header("🔑 API Configuration")
+    # st.header("🔑 API Configuration")
     # Check if key exists in secrets to decide if we show the warning
     has_secret_key = False
     try:
@@ -50,8 +50,8 @@ with st.sidebar:
         st.warning("⚠️ No API Key found in secrets.")
         user_api_key = st.text_input("Enter Gemini API Key:", type="password", placeholder="Paste key here...")
         st.markdown("[Get a free key here](https://aistudio.google.com/app/apikey)")
-    else:
-        st.success("✅ API Key loaded from secrets")
+    # else:
+        # st.success("✅ API Key loaded from secrets")
 
 # Initialize Model
 gemini_model = init_gemini(user_api_key)
