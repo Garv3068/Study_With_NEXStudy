@@ -93,7 +93,7 @@ with col1:
         - **Tutor Mode:** Ask follow-up questions freely (Context Aware).
         """
     )
-    st.info("👈 **Go to: AI Tutor ** in the sidebar")
+    st.info("👈 **Go to: AI Tutor** in the sidebar")
 
     st.markdown(
         """
