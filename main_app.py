@@ -141,8 +141,8 @@ with col2:
 st.divider()
 
 # ---------------- Footer ----------------
-st.markdown("---")
-st.caption("✨ Built with ❤️ by Garv | Powered by AI | NexStudy 2025")
+# st.markdown("---")
+# st.caption("✨ Built with ❤️ by Garv | Powered by AI | NexStudy 2025")
 
 # st.warning("🔒 Your API Key is safe. It is not stored anywhere and is only used for your session.")
 # st.markdown("---")
