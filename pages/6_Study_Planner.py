@@ -52,17 +52,17 @@ def init_gemini(api_key_input: str | None = None):
         return None
 
 # ---------------- Sidebar: Sign-in & Settings ----------------
-with st.sidebar:
-    st.header("👤 Account / Settings (Pro)")
-    email = st.text_input("Email (used to save/load plans):", key="planner_email")
-    st.write("— or leave blank to use local session only —")
-    st.markdown("---")
+# with st.sidebar:
+    # st.header("👤 Account / Settings (Pro)")
+    # email = st.text_input("Email (used to save/load plans):", key="planner_email")
+    # st.write("— or leave blank to use local session only —")
+    # st.markdown("---")
 
-    st.header("🔑 API Key (optional)")
+    # st.header("🔑 API Key (optional)")
     # allow pasting key ad-hoc (overrides secrets)
-    api_key_input = st.text_input("Paste Gemini API key (optional):", type="password")
+    # api_key_input = st.text_input("Paste Gemini API key (optional):", type="password")
     
-    st.markdown("---")
+    # st.markdown("---")
     st.header("⚙️ Planner Options")
     st.checkbox("Enable verbose plan (more detail)", value=True, key="verbose_plan")
     st.info(f"Plans are saved locally in the folder: {SAVE_DIR}")
