@@ -67,8 +67,24 @@ def init_gemini(api_key_input: str | None = None):
     st.checkbox("Enable verbose plan (more detail)", value=True, key="verbose_plan")
     st.info(f"Plans are saved locally in the folder: {SAVE_DIR}")
 
-gemini_model = init_gemini(api_key_input if api_key_input else None)
+@st.cache_resource
+def init_gemini(api_key_input):
+    key = api_key_input
+    if not key:
+        try:
+            key = st.secrets.get("GEMINI_API_KEY")
+        except Exception:
+            pass
+    
+    if not key:
+        return None
 
+    try:
+        genai.configure(api_key=key)
+        return genai.GenerativeModel("gemini-2.5-flash-lite")
+    except Exception as e:
+        st.error(f"Gemini initialization error: {e}")
+        return None
 # ---------------- Helper functions ----------------
 def extract_text_from_pdf(uploaded_file) -> str:
     try:
