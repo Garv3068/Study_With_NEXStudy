@@ -12,13 +12,15 @@ st.set_page_config(page_title="NexStudy — Study Planner Pro", page_icon="📅"
 st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
 
 # ---------------- Logo Logic ----------------
-if os.path.exists("logo.png"):
-    st.image("logo.png", width=200)
+if os.path.exists("assets/image.png"):
+    st.image("assets/image.png", width=150)
+elif os.path.exists("logo.png"):
+    st.image("logo.png", width=150)
 elif os.path.exists("logo.jpg"):
-    st.image("logo.jpg", width=200)
+    st.image("logo.jpg", width=150)
 
 st.title("📅 NexStudy — Study Planner (Pro)")
-st.write("Pro features: save/load plans, intensity control, ICS export, weekly overview, and premium model option.")
+st.write("Pro features: save/load plans, intensity control, ICS export, and AI customization.")
 
 # ---------------- Ensure storage folder ----------------
 SAVE_DIR = "nexstudy_plans"
@@ -28,21 +30,22 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 @st.cache_resource
 def init_gemini(api_key_input: str | None = None):
     key = None
-    # prefer input key, else secrets
+    # 1. Prefer input key
     if api_key_input:
         key = api_key_input
+    # 2. Else check secrets
     else:
         try:
             key = st.secrets.get("GEMINI_API_KEY")
         except Exception:
-            key = None
+            pass
 
     if not key:
         return None
 
     try:
         genai.configure(api_key=key)
-        # try pro/latest model first, fallback to stable
+        # Try latest model, fallback to stable
         try:
             return genai.GenerativeModel("gemini-2.0-flash")
         except Exception:
@@ -51,40 +54,32 @@ def init_gemini(api_key_input: str | None = None):
         st.error(f"Gemini initialization error: {e}")
         return None
 
-# ---------------- Sidebar: Sign-in & Settings ----------------
-# with st.sidebar:
-    # st.header("👤 Account / Settings (Pro)")
-    # email = st.text_input("Email (used to save/load plans):", key="planner_email")
-    # st.write("— or leave blank to use local session only —")
-    # st.markdown("---")
-
-    # st.header("🔑 API Key (optional)")
-    # allow pasting key ad-hoc (overrides secrets)
-    # api_key_input = st.text_input("Paste Gemini API key (optional):", type="password")
+# ---------------- Sidebar: Settings ----------------
+with st.sidebar:
+    st.header("⚙️ Settings")
     
-    # st.markdown("---")
-    st.header("⚙️ Planner Options")
+    # Check for API Key in Session State or Secrets
+    api_key = None
+    if "GEMINI_API_KEY" in st.secrets:
+        api_key = st.secrets["GEMINI_API_KEY"]
+        st.success("✅ API Key loaded from secrets")
+    else:
+        api_key = st.text_input("Enter Gemini API Key:", type="password")
+
+    st.markdown("---")
+    st.header("🛠️ Planner Options")
     st.checkbox("Enable verbose plan (more detail)", value=True, key="verbose_plan")
-    st.info(f"Plans are saved locally in the folder: {SAVE_DIR}")
-
-@st.cache_resource
-def init_gemini(api_key_input):
-    key = api_key_input
-    if not key:
-        try:
-            key = st.secrets.get("GEMINI_API_KEY")
-        except Exception:
-            pass
     
-    if not key:
-        return None
+    # User Info from Session State (Central Login)
+    user_email = st.session_state.get("user_email")
+    if user_email:
+        st.info(f"Logged in as: {user_email}")
+        st.caption(f"Plans save to: {SAVE_DIR}")
+    else:
+        st.warning("You are in Guest Mode. Sign in on the Home page to save plans permanently.")
 
-    try:
-        genai.configure(api_key=key)
-        return genai.GenerativeModel("gemini-2.5-flash-lite")
-    except Exception as e:
-        st.error(f"Gemini initialization error: {e}")
-        return None
+gemini_model = init_gemini(api_key)
+
 # ---------------- Helper functions ----------------
 def extract_text_from_pdf(uploaded_file) -> str:
     try:
@@ -102,7 +97,7 @@ def extract_text_from_pdf(uploaded_file) -> str:
 def call_gemini(prompt: str, generation_config=None) -> dict:
     """Safe wrapper to call gemini and return dict with keys 'text' or 'error'"""
     if gemini_model is None:
-        return {"error": "Gemini model not initialized. Provide API key in sidebar or set it in secrets."}
+        return {"error": "Gemini model not initialized. Provide API key."}
     try:
         resp = gemini_model.generate_content(prompt, generation_config=generation_config)
         return {"text": resp.text or ""}
@@ -202,10 +197,11 @@ with col_left:
         prefer_review_days = st.number_input("Reserve days before exam for revision:", min_value=0, max_value=30, value=7)
         generate = st.form_submit_button("🚀 Generate Pro Plan")
 
-    st.markdown("---")
-    st.subheader("Saved Plans")
-    if email:
-        files = list_saved_plans(email)
+    # Only show Saved Plans if logged in
+    if user_email:
+        st.markdown("---")
+        st.subheader("Saved Plans")
+        files = list_saved_plans(user_email)
         if files:
             sel = st.selectbox("Load a saved plan:", ["-- select saved plan --"] + files)
             if sel and sel != "-- select saved plan --":
@@ -213,10 +209,9 @@ with col_left:
                     loaded = load_plan_from_file(sel)
                     st.session_state["loaded_plan"] = loaded
                     st.success("Loaded plan into view.")
+                    st.rerun()
         else:
-            st.info("No saved plans found for this email.")
-    else:
-        st.info("Sign in with an email to save/load plans.")
+            st.info("No saved plans yet.")
 
 with col_right:
     st.subheader("Plan preview / results")
@@ -231,6 +226,11 @@ with col_right:
         if st.button("Download loaded plan as ICS"):
             ics_content = create_ics(plan_obj.get("meta",{}), plan_obj.get("days", []))
             st.download_button("Download ICS", data=ics_content, file_name="loaded_plan.ics", mime="text/calendar")
+        
+        if st.button("Clear Loaded Plan"):
+            del st.session_state["loaded_plan"]
+            st.rerun()
+            
     else:
         # Show instructions or existing session plan
         if "session_plan_markdown" in st.session_state:
@@ -260,7 +260,7 @@ if 'generate' in locals() and generate:
 
             plan_meta = {
                 "name": name or "Student",
-                "email": email or "local",
+                "email": user_email or "local",
                 "exam_date": exam_dt.strftime("%Y-%m-%d"),
                 "days_left": days_left,
                 "daily_hours": daily_hours,
@@ -282,7 +282,7 @@ if 'generate' in locals() and generate:
             Reserve {prefer_review_days} days at the end for revision.
             Focus areas (prioritize these): {plan_meta['focus_areas']}
 
-            Output a JSON with:
+            Output a strictly valid JSON with:
             - "quote": motivational short sentence
             - "strategy": list of 3 quick bullet points
             - "days": list of objects with keys: "date" (YYYY-MM-DD), "topic", "activity" (Read/Practice/Revise), "duration_hours"
@@ -297,23 +297,12 @@ if 'generate' in locals() and generate:
                     st.error(f"AI Error: {res['error']}")
                 else:
                     raw = res["text"].strip()
-                    # strip code fences if present
-                    if raw.startswith("```"):
-                        raw = raw.split("```",2)[-1].strip()
-                        if raw.lower().startswith("json"):
-                             raw = raw[4:].strip()
-                    
                     try:
                         parsed = json.loads(raw)
-                    except Exception:
-                        try:
-                            # fallback: attempt to find first { and parse
-                            first = min([i for i in [raw.find('{'), raw.find('[')] if i != -1])
-                            parsed = json.loads(raw[first:])
-                        except Exception as e:
-                            st.error("Failed to parse AI output as JSON. Raw output:")
-                            st.code(raw)
-                            parsed = None
+                    except Exception as e:
+                        st.error("Failed to parse AI output as JSON.")
+                        st.code(raw)
+                        parsed = None
 
                     if parsed:
                         # Compose day plan markdown and meta
@@ -346,14 +335,14 @@ if 'generate' in locals() and generate:
 if st.session_state.get("session_plan_markdown"):
     st.sidebar.markdown("---")
     st.sidebar.subheader("Plan Actions")
-    if email:
+    if user_email:
         if st.sidebar.button("Save Plan (to server)"):
             plan_package = {
                 "meta": st.session_state.get("session_plan_meta", {}),
                 "days": st.session_state.get("session_plan_days", []),
                 "markdown": st.session_state.get("session_plan_markdown", "")
             }
-            saved_path = save_plan_to_disk(email, plan_package)
+            saved_path = save_plan_to_disk(user_email, plan_package)
             st.sidebar.success(f"Saved!")
     
     st.sidebar.download_button("Download Plan (MD)", data=st.session_state["session_plan_markdown"],
