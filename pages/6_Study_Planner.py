@@ -12,12 +12,12 @@ st.set_page_config(page_title="NexStudy — Study Planner Pro", page_icon="📅"
 st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
 
 # ---------------- Logo Logic ----------------
-# if os.path.exists("assets/image.png"):
-    # st.image("assets/image.png", width=150)
-# elif os.path.exists("logo.png"):
-    # st.image("logo.png", width=150)
-# elif os.path.exists("logo.jpg"):
-    # st.image("logo.jpg", width=150)
+if os.path.exists("assets/image.png"):
+    st.image("assets/image.png", width=150)
+elif os.path.exists("logo.png"):
+    st.image("logo.png", width=150)
+elif os.path.exists("logo.jpg"):
+    st.image("logo.jpg", width=150)
 
 st.title("📅 NexStudy — Study Planner (Pro)")
 st.write("Pro features: save/load plans, intensity control, ICS export, and AI customization.")
@@ -25,6 +25,10 @@ st.write("Pro features: save/load plans, intensity control, ICS export, and AI c
 # ---------------- Ensure storage folder ----------------
 SAVE_DIR = "nexstudy_plans"
 os.makedirs(SAVE_DIR, exist_ok=True)
+
+# ---------------- Session State Init ----------------
+if "todos" not in st.session_state:
+    st.session_state.todos = []
 
 # ---------------- Gemini Initialization ----------------
 @st.cache_resource
@@ -56,13 +60,13 @@ def init_gemini(api_key_input: str | None = None):
 
 # ---------------- Sidebar: Settings ----------------
 with st.sidebar:
-    # st.header("⚙️ Settings")
+    st.header("⚙️ Settings")
     
     # Check for API Key in Session State or Secrets
     api_key = None
     if "GEMINI_API_KEY" in st.secrets:
         api_key = st.secrets["GEMINI_API_KEY"]
-        # st.success("✅ API Key loaded from secrets")
+        st.success("✅ API Key loaded from secrets")
     else:
         api_key = st.text_input("Enter Gemini API Key:", type="password")
 
@@ -173,6 +177,20 @@ def create_ics(plan_meta: dict, day_plan: list) -> str:
     lines.append("END:VCALENDAR")
     return "\n".join(lines)
 
+# ---------------- To-Do List Helpers ----------------
+def add_todo():
+    task = st.session_state.new_todo
+    if task:
+        st.session_state.todos.append({"task": task, "done": False})
+        st.session_state.new_todo = "" # Clear input
+
+def toggle_todo(index):
+    st.session_state.todos[index]["done"] = not st.session_state.todos[index]["done"]
+
+def delete_todo(index):
+    st.session_state.todos.pop(index)
+    st.rerun()
+
 # ---------------- UI: Planner form ----------------
 col_left, col_right = st.columns([1.1, 1.9])
 
@@ -214,30 +232,63 @@ with col_left:
             st.info("No saved plans yet.")
 
 with col_right:
-    st.subheader("Plan preview / results")
-    # If a plan has been loaded externally, show that
-    if st.session_state.get("loaded_plan"):
-        plan_obj = st.session_state.get("loaded_plan")
-        md = plan_obj.get("markdown", "")
-        st.markdown("### Loaded plan")
-        st.markdown(md)
-        st.download_button("Download loaded plan (MD)", data=md, file_name="loaded_plan.md", mime="text/markdown")
-        # Offer ICS too if present
-        if st.button("Download loaded plan as ICS"):
-            ics_content = create_ics(plan_obj.get("meta",{}), plan_obj.get("days", []))
-            st.download_button("Download ICS", data=ics_content, file_name="loaded_plan.ics", mime="text/calendar")
-        
-        if st.button("Clear Loaded Plan"):
-            del st.session_state["loaded_plan"]
-            st.rerun()
+    # TABS: Switch between AI Plan and Personal To-Do List
+    tab_plan, tab_todo = st.tabs(["📅 AI Study Plan", "✅ Personal To-Do"])
+    
+    with tab_plan:
+        # If a plan has been loaded externally, show that
+        if st.session_state.get("loaded_plan"):
+            plan_obj = st.session_state.get("loaded_plan")
+            md = plan_obj.get("markdown", "")
+            st.markdown("### Loaded plan")
+            st.markdown(md)
+            st.download_button("Download loaded plan (MD)", data=md, file_name="loaded_plan.md", mime="text/markdown")
+            # Offer ICS too if present
+            if st.button("Download loaded plan as ICS"):
+                ics_content = create_ics(plan_obj.get("meta",{}), plan_obj.get("days", []))
+                st.download_button("Download ICS", data=ics_content, file_name="loaded_plan.ics", mime="text/calendar")
             
-    else:
-        # Show instructions or existing session plan
-        if "session_plan_markdown" in st.session_state:
-            st.markdown("### Current generated plan (unsaved)")
-            st.markdown(st.session_state["session_plan_markdown"])
+            if st.button("Clear Loaded Plan"):
+                del st.session_state["loaded_plan"]
+                st.rerun()
+                
         else:
-            st.info("After you fill the configuration and click Generate, the plan will appear here.")
+            # Show instructions or existing session plan
+            if "session_plan_markdown" in st.session_state:
+                st.markdown("### Current generated plan (unsaved)")
+                st.markdown(st.session_state["session_plan_markdown"])
+            else:
+                st.info("After you fill the configuration and click Generate, the plan will appear here.")
+
+    with tab_todo:
+        st.markdown("### My Study Tasks")
+        st.caption("Add your own manual tasks here (not synced with AI plan).")
+        
+        # Add Todo Input
+        st.text_input("Add a new task:", key="new_todo", on_change=add_todo, placeholder="e.g. Read Chapter 4 by tonight")
+        
+        # Display Todos
+        if st.session_state.todos:
+            st.markdown("---")
+            for i, todo in enumerate(st.session_state.todos):
+                c1, c2, c3 = st.columns([0.1, 0.8, 0.1])
+                with c1:
+                    # Checkbox updates session state directly via on_change
+                    st.checkbox("", value=todo["done"], key=f"todo_{i}", on_change=toggle_todo, args=(i,))
+                with c2:
+                    if todo["done"]:
+                        st.markdown(f"~~{todo['task']}~~")
+                    else:
+                        st.markdown(todo['task'])
+                with c3:
+                    if st.button("🗑️", key=f"del_{i}"):
+                        delete_todo(i)
+            
+            if st.button("Clear Completed Tasks"):
+                st.session_state.todos = [t for t in st.session_state.todos if not t["done"]]
+                st.rerun()
+        else:
+            st.info("No tasks yet. Add one above to get started!")
 
 # ---------------- Generate plan logic ----------------
 if 'generate' in locals() and generate:
