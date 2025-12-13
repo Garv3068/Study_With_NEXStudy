@@ -17,6 +17,8 @@ if "user_email" not in st.session_state:
     st.session_state.user_email = None
 if "is_guest" not in st.session_state:
     st.session_state.is_guest = False
+if "auth_dialog_shown" not in st.session_state:
+    st.session_state.auth_dialog_shown = False
 
 # 2. Check URL Parameters (Auto-login from Vercel landing page)
 if not st.session_state.user_email:
@@ -28,6 +30,10 @@ if not st.session_state.user_email:
 # 3. Define the Login Dialog
 @st.dialog("Welcome to NexStudy 🧠")
 def login_dialog():
+    # Mark as shown immediately. If user closes with 'X', 
+    # this flag prevents it from reappearing (acting as Guest).
+    st.session_state.auth_dialog_shown = True
+    
     st.write("Sign in to sync your study plans and audio notes.")
     
     email_input = st.text_input("Enter your email address")
@@ -47,8 +53,8 @@ def login_dialog():
             st.session_state.is_guest = True
             st.rerun()
 
-# 4. Trigger Dialog if not logged in and not guest
-if not st.session_state.user_email and not st.session_state.is_guest:
+# 4. Trigger Dialog if not logged in, not guest, and hasn't seen dialog yet
+if not st.session_state.user_email and not st.session_state.is_guest and not st.session_state.auth_dialog_shown:
     login_dialog()
 
 # ---------------- GOOGLE ANALYTICS INJECTION ----------------
@@ -216,10 +222,11 @@ with st.sidebar:
             st.session_state.is_guest = False
             st.rerun()
     else:
-        # If guest or not logged in
+        # If guest or not logged in, show login button
+        # This button resets the 'auth_dialog_shown' flag so the popup appears again
         if st.button("Log In / Sign Up"):
-            # Reset guest state to trigger the dialog again
             st.session_state.is_guest = False
+            st.session_state.auth_dialog_shown = False
             st.rerun()
 # ---------------- Footer ----------------
 # st.markdown("---")
