@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import base64
+import streamlit.components.v1 as components  # Import components to inject JS
 
 # ---------------- Page Config (SEO Optimized) ----------------
 st.set_page_config(
@@ -9,6 +10,62 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ---------------- AUTHENTICATION LOGIC ----------------
+# 1. Initialize Session State
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+if "is_guest" not in st.session_state:
+    st.session_state.is_guest = False
+
+# 2. Check URL Parameters (Auto-login from Vercel landing page)
+if not st.session_state.user_email:
+    params = st.query_params
+    if "user" in params:
+        st.session_state.user_email = params["user"]
+        st.session_state.is_guest = False
+
+# 3. Define the Login Dialog
+@st.dialog("Welcome to NexStudy 🧠")
+def login_dialog():
+    st.write("Sign in to sync your study plans and audio notes.")
+    
+    email_input = st.text_input("Enter your email address")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Sign In / Sign Up", type="primary", use_container_width=True):
+            if email_input:
+                st.session_state.user_email = email_input
+                st.session_state.is_guest = False
+                st.rerun()
+            else:
+                st.warning("Please enter an email.")
+    
+    with col2:
+        if st.button("Continue as Guest", use_container_width=True):
+            st.session_state.is_guest = True
+            st.rerun()
+
+# 4. Trigger Dialog if not logged in and not guest
+if not st.session_state.user_email and not st.session_state.is_guest:
+    login_dialog()
+
+# ---------------- GOOGLE ANALYTICS INJECTION ----------------
+# This injects the Google Analytics code into the Streamlit app
+ga_js = """
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-L02K682TRE"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-L02K682TRE');
+</script>
+"""
+# Render the script invisibly (height=0)
+components.html(ga_js, height=0)
 
 # ---------------- Custom CSS (Optional: Clean up UI) ----------------
 hide_streamlit_style = """
@@ -66,6 +123,13 @@ with col_logo:
 
 with col_title:
     st.title("NexStudy")
+    
+    # Optional: Display User Status in Title Area
+    if st.session_state.user_email:
+        st.caption(f"👋 Welcome back, {st.session_state.user_email}")
+    elif st.session_state.is_guest:
+        st.caption("👀 Browsing as Guest")
+
     st.write("### The Unlimited, Free AI Academic Companion")
     st.markdown(
         """
@@ -140,6 +204,23 @@ with col2:
 
 st.divider()
 
+# ---------------- Sidebar / Footer ----------------
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("🌐 **[Visit Official Website](https://studywith-nexstudy.vercel.app/)**")
+    
+    # Login / Logout Button Logic
+    if st.session_state.user_email:
+        if st.button("Log Out"):
+            st.session_state.user_email = None
+            st.session_state.is_guest = False
+            st.rerun()
+    else:
+        # If guest or not logged in
+        if st.button("Log In / Sign Up"):
+            # Reset guest state to trigger the dialog again
+            st.session_state.is_guest = False
+            st.rerun()
 # ---------------- Footer ----------------
 # st.markdown("---")
 # st.caption("✨ Built with ❤️ by Garv | Powered by AI | NexStudy 2025")
