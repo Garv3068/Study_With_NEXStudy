@@ -30,14 +30,21 @@ def load_user_stats(email):
     has_plan = 1 if st.session_state.get("session_plan_meta") else 0
     has_audio = 1 if st.session_state.get("podcast_script") else 0
     
+    # Get To-Do stats
+    todos = st.session_state.get("todos", [])
+    pending_todos = len([t for t in todos if not t["done"]])
+    completed_todos = len([t for t in todos if t["done"]])
+    
     # Streak logic (Mock for guest, or calculate real for DB)
-    streak = 1 if (doubts_count + has_plan + has_audio) > 0 else 0
+    streak = 1 if (doubts_count + has_plan + has_audio + len(todos)) > 0 else 0
     
     return {
         "doubts_solved": doubts_count,
         "plans_created": has_plan,
         "audio_generated": has_audio,
-        "streak": streak
+        "streak": streak,
+        "pending_todos": pending_todos,
+        "completed_todos": completed_todos
     }
 
 # ---------------- User State ----------------
@@ -46,64 +53,31 @@ display_user = user_email if user_email else "Guest"
 stats = load_user_stats(display_user)
 
 # ---------------- Top Metrics Row ----------------
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
-    st.metric(label="🔥 Current Streak", value=f"{stats['streak']} Days")
+    st.metric(label="🔥 Streak", value=f"{stats['streak']} Days")
 
 with col2:
-    st.metric(label="💬 Doubts Asked", value=stats['doubts_solved'], delta="Session")
+    st.metric(label="💬 Doubts", value=stats['doubts_solved'], delta="Session")
 
 with col3:
-    st.metric(label="📅 Active Plans", value=stats['plans_created'], delta="Planner")
+    st.metric(label="📅 Plans", value=stats['plans_created'], delta="Planner")
 
 with col4:
-    st.metric(label="🎧 Audio Notes", value=stats['audio_generated'], delta="Podcaster")
+    st.metric(label="🎧 Audio", value=stats['audio_generated'], delta="Podcaster")
+
+with col5:
+    st.metric(label="✅ To-Dos", value=f"{stats['completed_todos']}/{stats['pending_todos'] + stats['completed_todos']}", delta=f"{stats['pending_todos']} Left")
 
 st.markdown("---")
 
 # ---------------- Main Dashboard Grid ----------------
 grid_col1, grid_col2 = st.columns([2, 1])
 
-# === LEFT COLUMN: Deep Insights ===
+# === LEFT COLUMN: Productivity Chart ===
 with grid_col1:
-    # 1. Study Planner Tracking
-    st.subheader("📅 Exam Countdown & Plan")
-    plan_meta = st.session_state.get("session_plan_meta")
-    
-    if plan_meta:
-        try:
-            exam_date = datetime.datetime.strptime(plan_meta['exam_date'], "%Y-%m-%d").date()
-            days_left = (exam_date - datetime.date.today()).days
-            
-            # Progress Bar Logic
-            total_duration = plan_meta.get('days_left', 30) # Default to 30 if missing
-            if total_duration <= 0: total_duration = 1
-            progress = max(0.0, min(1.0, (total_duration - days_left) / total_duration))
-            
-            st.info(f"**Focus:** {', '.join(plan_meta.get('focus_areas', ['General']))}")
-            st.progress(progress, text=f"{days_left} days remaining until Exams")
-            
-            # Mini Calendar View of upcoming tasks
-            if "session_plan_days" in st.session_state:
-                days_data = st.session_state["session_plan_days"]
-                df = pd.DataFrame(days_data)
-                if not df.empty:
-                    st.write("**Up Next:**")
-                    st.dataframe(
-                        df[["date", "topic", "activity"]].head(3),
-                        hide_index=True,
-                        use_container_width=True
-                    )
-        except Exception as e:
-            st.error("Error reading plan data. Try regenerating your plan.")
-    else:
-        st.warning("⚠️ No active study plan found.")
-        st.markdown("[👉 Create a Study Plan](Study_Planner)")
-
-    st.markdown("---")
-
-    # 2. Activity Chart (REAL-TIME SESSION DATA)
+    # Activity Chart (REAL-TIME SESSION DATA)
     st.subheader("📈 Productivity Trends")
     
     # Initialize empty data for the week
@@ -114,8 +88,11 @@ with grid_col1:
     # Update "Today's" data point with current session stats
     today_index = datetime.datetime.today().weekday() # 0 is Monday, 6 is Sunday
     doubts_data[today_index] = stats['doubts_solved']
-    # We assume roughly 15 mins per doubt or track simple activity for demo
-    hours_data[today_index] = stats['plans_created'] * 1 + stats['audio_generated'] * 0.5 
+    
+    # Calculate simple activity score
+    # Doubts + Plans + Audio + Completed Tasks
+    activity_score = (stats['plans_created'] * 2) + (stats['audio_generated'] * 2) + (stats['completed_todos'] * 1) + (stats['doubts_solved'] * 0.5)
+    hours_data[today_index] = activity_score
 
     chart_data = pd.DataFrame({
         'Day': days,
@@ -130,7 +107,26 @@ with grid_col1:
 
 # === RIGHT COLUMN: Quick Actions & History ===
 with grid_col2:
-    # 3. AI Tutor Recent Context
+    # 3. Pending Tasks (NEW)
+    st.subheader("📝 Pending Tasks")
+    todos = st.session_state.get("todos", [])
+    pending = [t for t in todos if not t["done"]]
+    
+    if pending:
+        for t in pending[:3]: # Show top 3
+            st.markdown(f"- ⬜ {t['task']}")
+        if len(pending) > 3:
+            st.caption(f"...and {len(pending) - 3} more.")
+        if st.button("Manage Tasks"):
+            st.switch_page("pages/4_Study_Planner.py")
+    else:
+        st.success("🎉 All caught up!")
+        if st.button("Add Tasks"):
+            st.switch_page("pages/4_Study_Planner.py")
+
+    st.markdown("---")
+
+    # 4. AI Tutor Recent Context
     st.subheader("🤖 Recent Doubts")
     messages = st.session_state.get("messages", [])
     if messages:
@@ -143,7 +139,6 @@ with grid_col2:
                     ❓ {msg[:60]}...
                 </div>
                 """, unsafe_allow_html=True)
-            st.caption(f"Total conversation depth: {len(messages)} messages")
             if st.button("Continue Chatting"):
                 st.switch_page("pages/2_NexStudy.py")
         else:
@@ -151,19 +146,6 @@ with grid_col2:
     else:
         st.info("No doubts asked yet.")
         st.markdown("[👉 Start Chatting](NexStudy)")
-
-    st.markdown("---")
-
-    # 4. Audio Notes Status
-    st.subheader("🎧 Last Audio Note")
-    if st.session_state.get("audio_file_path"):
-        st.success("Ready to play")
-        st.audio(st.session_state["audio_file_path"])
-        with st.expander("View Script Snippet"):
-            st.write(st.session_state.get("podcast_script", "")[:200] + "...")
-    else:
-        st.info("No audio generated this session.")
-        st.markdown("[👉 Create Audio Note](Audio_Notes)")
 
 # ---------------- Footer / Goals ----------------
 st.markdown("---")
@@ -173,6 +155,6 @@ col_g1, col_g2, col_g3 = st.columns(3)
 with col_g1:
     st.checkbox("Solve 5 Past Papers", value=False)
 with col_g2:
-    st.checkbox("Complete 10 hours study", value=True, disabled=True)
+    st.checkbox("Complete 10 tasks", value=(stats['completed_todos'] >= 10), disabled=True)
 with col_g3:
-    st.checkbox("Create 3 Audio Summaries", value=False)
+    st.checkbox("Create 3 Audio Summaries", value=(stats['audio_generated'] >= 3), disabled=True)
