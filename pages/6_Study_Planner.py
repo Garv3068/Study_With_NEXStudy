@@ -12,12 +12,12 @@ st.set_page_config(page_title="NexStudy — Study Planner Pro", page_icon="📅"
 st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
 
 # ---------------- Logo Logic ----------------
-if os.path.exists("assets/image.png"):
-    st.image("assets/image.png", width=150)
-elif os.path.exists("logo.png"):
-    st.image("logo.png", width=150)
-elif os.path.exists("logo.jpg"):
-    st.image("logo.jpg", width=150)
+# if os.path.exists("assets/image.png"):
+    # st.image("assets/image.png", width=150)
+# elif os.path.exists("logo.png"):
+    # st.image("logo.png", width=150)
+# elif os.path.exists("logo.jpg"):
+    # st.image("logo.jpg", width=150)
 
 st.title("📅 NexStudy — Study Planner (Pro)")
 st.write("Pro features: save/load plans, intensity control, ICS export, and AI customization.")
@@ -56,7 +56,7 @@ def init_gemini(api_key_input: str | None = None):
 
 # ---------------- Sidebar: Settings ----------------
 with st.sidebar:
-    st.header("⚙️ Settings")
+    # st.header("⚙️ Settings")
     
     # Check for API Key in Session State or Secrets
     api_key = None
