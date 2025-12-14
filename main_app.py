@@ -51,7 +51,7 @@ firebase_auth_js = """
         .then((result) => {
             localStorage.setItem("nexstudy_user", JSON.stringify(result.user));
             location.reload();
-       
+"""       
 # ---------------- Footer ----------------
 # st.markdown("---")
 # st.caption("✨ Built with ❤️ by Garv | Powered by AI | NexStudy 2025")
