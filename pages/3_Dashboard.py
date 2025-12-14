@@ -118,11 +118,11 @@ with grid_col2:
         if len(pending) > 3:
             st.caption(f"...and {len(pending) - 3} more.")
         if st.button("Manage Tasks"):
-            st.switch_page("pages/4_Study_Planner.py")
+            st.switch_page("pages/6_Study_Planner.py")
     else:
         st.success("🎉 All caught up!")
         if st.button("Add Tasks"):
-            st.switch_page("pages/4_Study_Planner.py")
+            st.switch_page("pages/6_Study_Planner.py")
 
     st.markdown("---")
 
