@@ -27,3 +27,4 @@ google-generativeai
 openai
 pytesseract
 gTTs
+watchdog
