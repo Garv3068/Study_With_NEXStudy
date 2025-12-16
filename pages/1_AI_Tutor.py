@@ -3,6 +3,7 @@ import google.generativeai as genai
 import pdfplumber
 import os
 import datetime
+import json
 from PIL import Image
 
 # ---------------- Page config ----------------
@@ -31,7 +32,15 @@ def get_db():
             return None
 
         if not firebase_admin._apps:
-            key_dict = dict(st.secrets["firebase_key"])
+            # Robustly handle the secret format (Dict or JSON String)
+            firebase_secret = st.secrets["firebase_key"]
+            
+            # Fix for "dictionary update sequence element" error
+            if isinstance(firebase_secret, str):
+                key_dict = json.loads(firebase_secret)
+            else:
+                key_dict = dict(firebase_secret)
+
             cred = credentials.Certificate(key_dict)
             firebase_admin.initialize_app(cred)
         return firestore.client()
