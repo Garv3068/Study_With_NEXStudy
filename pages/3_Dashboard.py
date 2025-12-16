@@ -140,7 +140,7 @@ with grid_col2:
                 </div>
                 """, unsafe_allow_html=True)
             if st.button("Continue Chatting"):
-                st.switch_page("pages/2_NexStudy.py")
+                st.switch_page("pages/1_AI_Tutor.py")
         else:
              st.info("No questions asked yet.")
     else:
