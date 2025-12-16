@@ -145,7 +145,7 @@ with grid_col2:
              st.info("No questions asked yet.")
     else:
         st.info("No doubts asked yet.")
-        st.markdown("[👉 Start Chatting](NexStudy)")
+        st.markdown("[👉 Start Chatting](pages/1_AI_Tutor.py)")
 
 # ---------------- Footer / Goals ----------------
 st.markdown("---")
