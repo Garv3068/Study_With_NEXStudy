@@ -25,12 +25,18 @@ def get_db():
         import firebase_admin
         from firebase_admin import credentials, firestore
         
+        # Check if secrets exist
+        if "firebase_key" not in st.secrets:
+            # Silent fail for guests, but useful for debugging if you expect it to work
+            return None
+
         if not firebase_admin._apps:
             key_dict = dict(st.secrets["firebase_key"])
             cred = credentials.Certificate(key_dict)
             firebase_admin.initialize_app(cred)
         return firestore.client()
     except Exception as e:
+        st.error(f"Database Connection Error: {e}")
         return None
 
 def load_chat_history(email):
@@ -43,8 +49,8 @@ def load_chat_history(email):
             if doc.exists:
                 data = doc.to_dict()
                 return data.get("chat_history", [])
-        except:
-            pass
+        except Exception as e:
+            st.warning(f"Could not load history: {e}")
     return []
 
 def save_chat_history(email, messages):
@@ -55,20 +61,24 @@ def save_chat_history(email, messages):
             db.collection("users").document(email).set(
                 {"chat_history": messages}, merge=True
             )
-        except:
-            pass
+        except Exception as e:
+            # st.warning(f"Could not save history: {e}") 
+            pass # Keep saving silent to avoid UI clutter during typing
 
 # ---------------- Session State & Data Loading ----------------
 user_email = st.session_state.get("user_email")
 
-# Load history ONLY if we haven't loaded it yet into session state
+# Initialize messages if not present
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    if user_email:
-        # Pull from DB if logged in
+
+# SYNC LOGIC: If user is logged in, but we haven't loaded their DB history yet
+if user_email and not st.session_state.get("history_loaded", False):
+    with st.spinner("Syncing chat history..."):
         db_msgs = load_chat_history(user_email)
         if db_msgs:
             st.session_state.messages = db_msgs
+        st.session_state.history_loaded = True
 
 if "saved" not in st.session_state:
     st.session_state.saved = []
@@ -91,7 +101,7 @@ def init_gemini(api_key_input):
 
     try:
         genai.configure(api_key=key)
-        return genai.GenerativeModel("gemini-2.5-flash-lite")
+        return genai.GenerativeModel("gemini-2.0-flash")
     except Exception as e:
         st.error(f"Gemini initialization error: {e}")
         return None
@@ -102,6 +112,10 @@ with st.sidebar:
     
     if user_email:
         st.success(f"Logged in as: {user_email}")
+        # Add a manual sync button just in case
+        if st.button("🔄 Force Sync History"):
+            st.session_state.history_loaded = False
+            st.rerun()
     else:
         st.info("Log in on Home page to save chat history permanently.")
 
@@ -148,19 +162,14 @@ def call_gemini(contents):
 def append_user_message(text):
     msg = {"role": "user", "text": text}
     st.session_state.messages.append(msg)
-    # Save to DB immediately
     if user_email: save_chat_history(user_email, st.session_state.messages)
 
 def append_assistant_message(text):
     msg = {"role": "assistant", "text": text}
     st.session_state.messages.append(msg)
-    # Save to DB immediately
     if user_email: save_chat_history(user_email, st.session_state.messages)
 
 def get_chat_history_text():
-    """
-    Reconstructs the chat history as a text block to give context to the model.
-    """
     history_context = ""
     recent_messages = st.session_state.messages[-6:]
     for msg in recent_messages:
@@ -200,7 +209,7 @@ with left:
         with col_a:
             if st.button("🗑️ Clear Chat"):
                 st.session_state.messages = []
-                if user_email: save_chat_history(user_email, []) # Clear DB too
+                if user_email: save_chat_history(user_email, [])
                 st.rerun()
         with col_b:
             if st.button("💾 Saved Items"):
