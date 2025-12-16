@@ -28,3 +28,4 @@ openai
 pytesseract
 gTTs
 watchdog
+pyrebase4
