@@ -35,9 +35,15 @@ def get_db():
             # Robustly handle the secret format (Dict or JSON String)
             firebase_secret = st.secrets["firebase_key"]
             
-            # Fix for "dictionary update sequence element" error
+            # Fix for "dictionary update sequence element" error AND JSON parsing errors
             if isinstance(firebase_secret, str):
-                key_dict = json.loads(firebase_secret)
+                try:
+                    # Clean the string and parse
+                    clean_secret = firebase_secret.strip()
+                    key_dict = json.loads(clean_secret)
+                except json.JSONDecodeError:
+                    st.error("Secrets Error: 'firebase_key' is a string but not valid JSON. Please check your secrets.toml format.")
+                    return None
             else:
                 key_dict = dict(firebase_secret)
 
