@@ -3,7 +3,6 @@ import google.generativeai as genai
 import pdfplumber
 import os
 import datetime
-import json
 from PIL import Image
 
 # ---------------- Page config ----------------
@@ -11,95 +10,11 @@ st.set_page_config(page_title="NexStudy", page_icon="🧠", layout="wide")
 st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
 
 # Optional logo
-if os.path.exists("logo.png"):
-    st.image("logo.png", width=200)
-elif os.path.exists("logo.jpg"):
+if os.path.exists("logo.jpg"):
     st.image("logo.jpg", width=200)
 
 st.title("🧠 NexStudy")
 st.caption("Your personal AI academic companion. Solve doubts, learn topics, and master your syllabus.")
-
-# ---------------- DATABASE HELPER (Persistence) ----------------
-def get_db():
-    """Initializes and returns the Firestore client safely."""
-    try:
-        import firebase_admin
-        from firebase_admin import credentials, firestore
-        
-        # Check if secrets exist
-        if "firebase_key" not in st.secrets:
-            # Silent fail for guests, but useful for debugging if you expect it to work
-            return None
-
-        if not firebase_admin._apps:
-            # Robustly handle the secret format (Dict or JSON String)
-            firebase_secret = st.secrets["firebase_key"]
-            
-            # Fix for "dictionary update sequence element" error AND JSON parsing errors
-            if isinstance(firebase_secret, str):
-                try:
-                    # Clean the string and parse
-                    clean_secret = firebase_secret.strip()
-                    key_dict = json.loads(clean_secret)
-                except json.JSONDecodeError:
-                    st.error("Secrets Error: 'firebase_key' is a string but not valid JSON. Please check your secrets.toml format.")
-                    return None
-            else:
-                key_dict = dict(firebase_secret)
-
-            cred = credentials.Certificate(key_dict)
-            firebase_admin.initialize_app(cred)
-        return firestore.client()
-    except Exception as e:
-        st.error(f"Database Connection Error: {e}")
-        return None
-
-def load_chat_history(email):
-    """Loads chat history from Firestore."""
-    db = get_db()
-    if db and email:
-        try:
-            doc_ref = db.collection("users").document(email)
-            doc = doc_ref.get()
-            if doc.exists:
-                data = doc.to_dict()
-                return data.get("chat_history", [])
-        except Exception as e:
-            st.warning(f"Could not load history: {e}")
-    return []
-
-def save_chat_history(email, messages):
-    """Saves chat history to Firestore."""
-    db = get_db()
-    if db and email:
-        try:
-            db.collection("users").document(email).set(
-                {"chat_history": messages}, merge=True
-            )
-        except Exception as e:
-            # st.warning(f"Could not save history: {e}") 
-            pass # Keep saving silent to avoid UI clutter during typing
-
-# ---------------- Session State & Data Loading ----------------
-user_email = st.session_state.get("user_email")
-
-# Initialize messages if not present
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# SYNC LOGIC: If user is logged in, but we haven't loaded their DB history yet
-if user_email and not st.session_state.get("history_loaded", False):
-    with st.spinner("Syncing chat history..."):
-        db_msgs = load_chat_history(user_email)
-        if db_msgs:
-            st.session_state.messages = db_msgs
-        st.session_state.history_loaded = True
-
-if "saved" not in st.session_state:
-    st.session_state.saved = []
-
-if "topic_explanation" not in st.session_state:
-    st.session_state.topic_explanation = ""
 
 # ---------------- Gemini Initialization ----------------
 @st.cache_resource
@@ -110,29 +25,21 @@ def init_gemini(api_key_input):
             key = st.secrets.get("GEMINI_API_KEY")
         except Exception:
             pass
-    
+
     if not key:
         return None
 
     try:
         genai.configure(api_key=key)
-        return genai.GenerativeModel("gemini-2.5-flash")
+        # return genai.GenerativeModel("gemini-2.0-flash")
+        return genai.GenerativeModel("gemini-2.5-flash-lite")
     except Exception as e:
         st.error(f"Gemini initialization error: {e}")
         return None
 
 # ---------------- Sidebar ----------------
 with st.sidebar:
-    st.header("⚙️ Settings")
-    
-    if user_email:
-        st.success(f"Logged in as: {user_email}")
-        # Add a manual sync button just in case
-        if st.button("🔄 Force Sync History"):
-            st.session_state.history_loaded = False
-            st.rerun()
-    else:
-        st.info("Log in on Home page to save chat history permanently.")
+    # st.header("⚙️ Settings")
 
     has_secret_key = False
     try:
@@ -145,10 +52,20 @@ with st.sidebar:
     if not has_secret_key:
         st.warning("⚠️ No API Key found.")
         user_api_key = st.text_input("Enter Gemini API Key:", type="password")
-    else:
-        st.success("✅ API Key loaded")
+    # else:
+        # st.success("✅ API Key loaded")
 
 gemini_model = init_gemini(user_api_key)
+
+# ---------------- Session State ----------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "saved" not in st.session_state:
+    st.session_state.saved = []
+
+if "topic_explanation" not in st.session_state:
+    st.session_state.topic_explanation = ""
 
 # ---------------- Helpers ----------------
 def extract_text_from_pdf(uploaded_file):
@@ -175,22 +92,26 @@ def call_gemini(contents):
         return {"error": str(e)}
 
 def append_user_message(text):
-    msg = {"role": "user", "text": text}
-    st.session_state.messages.append(msg)
-    if user_email: save_chat_history(user_email, st.session_state.messages)
+    st.session_state.messages.append({"role": "user", "text": text})
 
 def append_assistant_message(text):
-    msg = {"role": "assistant", "text": text}
-    st.session_state.messages.append(msg)
-    if user_email: save_chat_history(user_email, st.session_state.messages)
+    st.session_state.messages.append({"role": "assistant", "text": text})
 
 def get_chat_history_text():
+    """
+    Reconstructs the chat history as a text block to give context to the model.
+    We limit it to the last 6 turns to save tokens and focus on recent context.
+    """
     history_context = ""
+    # Get last 6 messages
     recent_messages = st.session_state.messages[-6:]
+
     for msg in recent_messages:
         role = "User" if msg["role"] == "user" else "NexStudy AI"
+        # Clean text to avoid confusing the model with heavy formatting
         clean_text = msg['text'].replace("\n", " ") 
         history_context += f"{role}: {clean_text}\n"
+
     return history_context
 
 # ---------------- Layout ----------------
@@ -211,7 +132,7 @@ with left:
     # ==========================================
     if mode == "💬 Doubt Solver & Chat":
         st.info("Ask questions or upload homework.")
-        
+
         st.session_state.input_type = st.radio(
             "Attach Material:", 
             ("None", "PDF Document", "Image (Problem)"), 
@@ -219,12 +140,11 @@ with left:
         )
 
         st.divider()
-        
+
         col_a, col_b = st.columns(2)
         with col_a:
             if st.button("🗑️ Clear Chat"):
                 st.session_state.messages = []
-                if user_email: save_chat_history(user_email, [])
                 st.rerun()
         with col_b:
             if st.button("💾 Saved Items"):
@@ -241,20 +161,30 @@ with left:
     # ==========================================
     elif mode == "📖 Topic Explainer":
         st.markdown("#### 🧠 Learn a Concept")
-        topic_input = st.text_input("Topic:", placeholder="e.g. Thermodynamics")
-        explanation_level = st.selectbox("Depth:", ["ELI5", "High School", "College", "PhD"])
+
+        topic_input = st.text_input("Topic:", placeholder="e.g. Thermodynamics, SQL Joins")
+
+        explanation_level = st.selectbox(
+            "Depth:",
+            ["ELI5 (Simple)", "High School", "College/Undergrad", "PhD/Research"]
+        )
+
         include_links = st.checkbox("Include Video Links", value=True)
-        
+
         if st.button("🚀 Explain", type="primary"):
             if not topic_input.strip():
                 st.warning("Enter a topic.")
             else:
-                prompt = f"Explain '{topic_input}'. Level: {explanation_level}."
-                if include_links: prompt += " Include 3 YouTube resource links."
-                
+                prompt_text = f"Explain '{topic_input}'."
+                prompt_details = f"Level: {explanation_level}.\n"
+                if include_links:
+                    prompt_details += "Include 3 best YouTube/Web resource links."
+
+                full_prompt = f"{prompt_text}\n{prompt_details}"
+
                 if gemini_model:
-                    with st.spinner("Explaining..."):
-                        res = call_gemini([f"You are an expert tutor. {prompt}"])
+                    with st.spinner(f"Explaining '{topic_input}'..."):
+                        res = call_gemini([f"You are an expert tutor. {full_prompt}"])
                         if not res.get("error"):
                             st.session_state.topic_explanation = res["text"]
                             st.rerun()
@@ -265,42 +195,77 @@ with left:
 
 # ---------------- RIGHT COLUMN: Interaction Area ----------------
 with right:
-    
+
+    # ==========================================
+    # VIEW 1: CHAT INTERFACE
+    # ==========================================
     if mode == "💬 Doubt Solver & Chat":
+
         chat_container = st.container()
         with chat_container:
             for i, msg in enumerate(st.session_state.messages):
+                # -----------------------------------------------
+                # USER MESSAGE -> GREY BOX
+                # -----------------------------------------------
                 if msg["role"] == "user":
                     user_text = msg['text'].replace('\n', '<br>')
-                    st.markdown(f"""
-                        <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #000000;">
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background-color: #f0f2f6; 
+                            padding: 15px; 
+                            border-radius: 10px; 
+                            margin-bottom: 20px; 
+                            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                            color: #000000;">
                             <h5 style="margin: 0 0 8px 0; color: #444;">👤 You</h5>
                             <div style="font-size: 1rem;">{user_text}</div>
                         </div>
-                        """, unsafe_allow_html=True)
+                        """, 
+                        unsafe_allow_html=True
+                    )
+
+                # -----------------------------------------------
+                # AI MESSAGE -> CLEAN TEXT (No Box)
+                # -----------------------------------------------
                 else:
                     st.markdown(f"### 🧠 NexStudy")
                     st.markdown(msg['text'])
-                    
-                    b1, b2, b3 = st.columns([1,1,1])
+
+                    # Tool Buttons below AI text
+                    b1, b2, b3, b4, b5 = st.columns([1,1,1,1,1])
                     if b1.button("Simplify", key=f"s_{i}"):
                         res = call_gemini([f"Simplify this:\n\n{msg['text']}"])
                         if not res.get("error"): append_assistant_message(res["text"]); st.rerun()
+
                     if b2.button("Steps", key=f"st_{i}"):
                         res = call_gemini([f"Show steps:\n\n{msg['text']}"])
                         if not res.get("error"): append_assistant_message(res["text"]); st.rerun()
-                    if b3.button("Save", key=f"sv_{i}"):
+
+                    if b3.button("Quiz", key=f"q_{i}"):
+                        res = call_gemini([f"Make 3 MCQs on this:\n\n{msg['text']}"])
+                        if not res.get("error"): append_assistant_message(res["text"]); st.rerun()
+
+                    if b4.button("Cards", key=f"c_{i}"):
+                        res = call_gemini([f"Make flashcards on this:\n\n{msg['text']}"])
+                        if not res.get("error"): append_assistant_message(res["text"]); st.rerun()
+
+                    if b5.button("Save", key=f"sv_{i}"):
                         st.session_state.saved.append({"text": msg["text"], "timestamp": str(datetime.datetime.now())})
                         st.success("Saved!")
+
                     st.divider()
 
-        # Input Form
+        # ---------------- CHAT INPUT ----------------
         st.write("")
+        # FIX: Changed clear_on_submit to True. 
+        # This clears the text area and file uploaders automatically after sending.
         with st.form(key="chat_form", clear_on_submit=True):
             col_in, col_btn = st.columns([6, 1])
             with col_in:
                 user_input = st.text_area("Type your question...", height=80, key="u_in")
-            
+
+            # Show uploaders based on Left Sidebar selection
             uploaded_pdf = None
             uploaded_image = None
             if st.session_state.get("input_type") == "PDF Document":
@@ -312,14 +277,30 @@ with right:
                 st.write("")
                 st.write("")
                 if st.form_submit_button("🚀 Send"):
+
+                    # --- CONTINUOUS CHAT LOGIC ---
+                    # 1. Get history text
                     history_text = get_chat_history_text()
-                    system_prompt = f"You are NexStudy. Context:\n{history_text}\nAnswer the new question."
+
+                    # 2. Construct System Prompt with Memory
+                    system_prompt = f"""
+                    You are NexStudy, an expert academic tutor.
                     
+                    **Context from previous conversation:**
+                    {history_text}
+                    
+                    **Instructions:**
+                    - Answer the NEW user question below.
+                    - Use the context above if the user refers to "it", "that", or previous topics.
+                    - If the user uploads a file, prioritize analyzing that file.
+                    - Be concise and helpful.
+                    """
+
                     content_parts = [system_prompt]
                     display_text = []
 
                     if user_input.strip():
-                        content_parts.append(user_input)
+                        content_parts.append(f"NEW USER QUESTION: {user_input}")
                         display_text.append(user_input)
 
                     if uploaded_pdf:
@@ -327,7 +308,7 @@ with right:
                         if pdf_text:
                             content_parts.append(f"PDF Context:\n{pdf_text}")
                             display_text.append(f"📄 [PDF: {uploaded_pdf.name}]")
-                    
+
                     if uploaded_image:
                         try:
                             img = Image.open(uploaded_image)
@@ -347,11 +328,18 @@ with right:
                             st.error("Check API Key.")
                     else:
                         st.warning("Empty message.")
-    
+
+    # ==========================================
+    # VIEW 2: TOPIC EXPLAINER OUTPUT
+    # ==========================================
     elif mode == "📖 Topic Explainer":
         if st.session_state.topic_explanation:
             st.markdown("### 📝 Topic Guide")
+            st.markdown("---")
             st.markdown(st.session_state.topic_explanation)
+            st.markdown("---")
+            if st.button("📋 Copy Text"):
+                 st.code(st.session_state.topic_explanation)
         else:
             st.info("👈 Use the sidebar to generate a topic guide.")
             st.markdown("""
