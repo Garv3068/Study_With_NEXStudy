@@ -66,7 +66,7 @@ with st.sidebar:
     api_key = None
     if "GEMINI_API_KEY" in st.secrets:
         api_key = st.secrets["GEMINI_API_KEY"]
-        st.success("✅ API Key loaded from secrets")
+        # st.success("✅ API Key loaded from secrets")
     else:
         api_key = st.text_input("Enter Gemini API Key:", type="password")
 
