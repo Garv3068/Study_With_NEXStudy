@@ -70,7 +70,7 @@ with st.sidebar:
     else:
         api_key = st.text_input("Enter Gemini API Key:", type="password")
 
-    st.markdown("---")
+    # st.markdown("---")
     st.header("🛠️ Planner Options")
     st.checkbox("Enable verbose plan (more detail)", value=True, key="verbose_plan")
     
