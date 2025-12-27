@@ -20,9 +20,13 @@ st.set_page_config(
 # =========================================================
 @st.cache_resource
 def get_supabase() -> Client:
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_ANON_KEY"]  # publishable (anon) key
-    return create_client(url, key)
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_ANON_KEY"]  # publishable (anon) key
+        return create_client(url, key)
+    except Exception as e:
+        st.error("Supabase secrets missing. Please check .streamlit/secrets.toml")
+        return None
 
 supabase = get_supabase()
 
@@ -46,6 +50,7 @@ if "auth_mode" not in st.session_state:
 # HELPER: LOAD PROFILE
 # =========================================================
 def load_profile(user_id: str):
+    if not supabase: return
     try:
         res = (
             supabase
@@ -80,26 +85,21 @@ if not st.session_state.user and not st.session_state.is_guest:
 # AUTH HELPERS (SUPABASE)
 # =========================================================
 def signup(email: str, password: str, username: str):
+    if not supabase: return False, "Supabase not initialized"
     try:
         # 1) create auth user
+        # Supabase raises an exception if this fails, so no need to check .error
         res = supabase.auth.sign_up({"email": email, "password": password})
 
-        # AuthResponse: check for error attribute
-        if res.error:
-            return False, res.error.message
-
         user = res.user
+        if not user:
+            return False, "Signup failed: No user returned."
+            
         user_id = user.id
 
         # 2) create profile with username
-        prof_res = (
-            supabase
-            .table("profiles")
-            .insert({"id": user_id, "username": username})
-            .execute()
-        )
-        if prof_res.error:
-            return False, prof_res.error.message
+        # .execute() raises exception on failure
+        supabase.table("profiles").insert({"id": user_id, "username": username}).execute()
 
         # 3) store simplified user/profile in session
         st.session_state.user = {
@@ -118,15 +118,17 @@ def signup(email: str, password: str, username: str):
 
 
 def login(email: str, password: str):
+    if not supabase: return None, "Supabase not initialized"
     try:
+        # Supabase raises an exception if login fails
         res = supabase.auth.sign_in_with_password(
             {"email": email, "password": password}
         )
 
-        if res.error:
-            return None, res.error.message
-
         user = res.user
+        if not user:
+            return None, "Login failed: No user returned."
+
         user_id = user.id
 
         st.session_state.user = {
@@ -164,7 +166,7 @@ def login_dialog():
                 if email_login and password_login:
                     user, err = login(email_login, password_login)
                     if err:
-                        st.error(err)
+                        st.error(f"Login failed: {err}")
                     else:
                         st.success("Logged in successfully!")
                         st.rerun()
@@ -195,7 +197,7 @@ def login_dialog():
                     st.success("Account created and logged in!")
                     st.rerun()
                 else:
-                    st.error(err or "Could not sign up.")
+                    st.error(f"Signup failed: {err}")
             else:
                 st.warning("Please fill all fields.")
 
@@ -302,8 +304,7 @@ with col_title:
     st.write("### The Unlimited, Free AI Academic Companion")
     st.markdown(
         """
-        **Tired of running out of credits?**  
-        NexStudy is open, private, and unlimited.
+        **Tired of running out of credits?** NexStudy is open, private, and unlimited.
 
         🚀 Solver · 📅 Planner · 🎧 Audio Notes · 💻 Coding
         """
@@ -393,7 +394,6 @@ with st.sidebar:
             st.session_state.auth_dialog_shown = False
             st.session_state.auth_mode = "login"
             st.rerun()
-
 # ---------------- Footer ----------------
 # st.markdown("---")
 # st.caption("✨ Built with ❤️ by Garv | Powered by AI | NexStudy 2025")
