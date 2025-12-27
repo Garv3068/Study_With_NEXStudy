@@ -3,6 +3,7 @@ import os
 import base64
 import datetime
 import streamlit.components.v1 as components
+from supabase import create_client, Client
 
 # =========================================================
 # PAGE CONFIG (SEO OPTIMIZED)
@@ -15,90 +16,172 @@ st.set_page_config(
 )
 
 # =========================================================
-# FIREBASE DATABASE LOGIC (SAFE – NO CRASH IF NOT CONFIGURED)
+# SUPABASE CLIENT
 # =========================================================
-def log_login_to_db(email: str):
-    """Save user email + timestamp to Firestore"""
-    if not email:
-        return
+@st.cache_resource
+def get_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_ANON_KEY"]
+    return create_client(url, key)
 
-    try:
-        import firebase_admin
-        from firebase_admin import credentials, firestore
-
-        if not firebase_admin._apps:
-            key_dict = dict(st.secrets["firebase_key"])
-            cred = credentials.Certificate(key_dict)
-            firebase_admin.initialize_app(cred)
-
-        db = firestore.client()
-
-        db.collection("users").document(email).set(
-            {
-                "email": email,
-                "last_login": datetime.datetime.utcnow(),
-                "platform": "Streamlit App",
-            },
-            merge=True,
-        )
-
-    except Exception:
-        # Silent fail so app never breaks
-        pass
+supabase = get_supabase()
 
 # =========================================================
 # SESSION STATE
 # =========================================================
-if "user_email" not in st.session_state:
-    st.session_state.user_email = None
-
+if "user" not in st.session_state:
+    st.session_state.user = None          # full auth user object (dict)
+if "profile" not in st.session_state:
+    st.session_state.profile = None       # row from profiles table
 if "is_guest" not in st.session_state:
     st.session_state.is_guest = False
-
 if "auth_dialog_shown" not in st.session_state:
     st.session_state.auth_dialog_shown = False
+if "auth_mode" not in st.session_state:
+    st.session_state.auth_mode = "login"  # "login" or "signup"
 
 # =========================================================
-# AUTO LOGIN FROM URL (VERCEL → STREAMLIT)
+# HELPER: LOAD PROFILE
 # =========================================================
-if not st.session_state.user_email:
-    params = st.query_params
+def load_profile(user_id: str):
+    try:
+        res = (
+            supabase
+            .table("profiles")
+            .select("*")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+        if res.data:
+            st.session_state.profile = res.data
+    except Exception:
+        st.session_state.profile = None
+
+# =========================================================
+# AUTO LOGIN FROM URL (OPTIONAL, USING EMAIL QUERY PARAM)
+# =========================================================
+# NOTE: this is legacy from Vercel; it only sets a "guest identity" now.
+params = st.query_params
+if not st.session_state.user and not st.session_state.is_guest:
     if "user" in params:
         email = params["user"]
-        st.session_state.user_email = email
-        st.session_state.is_guest = False
-        log_login_to_db(email)
+        # treat as guest with known email (no password)
+        st.session_state.is_guest = True
+        st.session_state.profile = {"username": email.split("@")[0], "email": email}
 
 # =========================================================
-# LOGIN DIALOG
+# AUTH HELPERS (SUPABASE)
+# =========================================================
+def signup(email: str, password: str, username: str):
+    try:
+        # 1) create auth user
+        res = supabase.auth.sign_up({"email": email, "password": password})
+        if res.get("error"):
+            return False, res["error"]["message"]
+
+        user = res["user"]
+        user_id = user["id"]
+
+        # 2) create profile with username
+        prof_res = (
+            supabase
+            .table("profiles")
+            .insert({"id": user_id, "username": username})
+            .execute()
+        )
+        if prof_res.error:
+            return False, prof_res.error.message
+
+        # store in session
+        st.session_state.user = user
+        st.session_state.profile = {"id": user_id, "username": username, "email": email}
+        st.session_state.is_guest = False
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def login(email: str, password: str):
+    try:
+        res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        if res.get("error"):
+            return None, res["error"]["message"]
+
+        user = res["user"]
+        st.session_state.user = user
+        st.session_state.is_guest = False
+
+        # load profile
+        load_profile(user["id"])
+        return user, None
+    except Exception as e:
+        return None, str(e)
+
+# =========================================================
+# LOGIN / SIGNUP DIALOG
 # =========================================================
 @st.dialog("Welcome to NexStudy 🧠")
 def login_dialog():
     st.session_state.auth_dialog_shown = True
-    st.write("Sign in to sync your study plans and notes.")
 
-    email = st.text_input("Enter your email address")
+    mode = st.session_state.auth_mode
 
-    col1, col2 = st.columns(2)
+    tabs = st.tabs(["Log In", "Sign Up"])
+    if mode == "login":
+        login_tab, signup_tab = tabs
+    else:
+        signup_tab, login_tab = tabs  # just to keep both present
 
-    with col1:
-        if st.button("Sign In / Sign Up", type="primary", use_container_width=True):
-            if email:
-                st.session_state.user_email = email
-                st.session_state.is_guest = False
-                log_login_to_db(email)
+    # --------- LOGIN TAB ----------
+    with tabs[0]:
+        st.subheader("Log In")
+        st.caption("Sign in with your email and password to sync your study data.")
+        email_login = st.text_input("Email", key="login_email")
+        password_login = st.text_input("Password", type="password", key="login_password")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Log In", type="primary", use_container_width=True, key="login_btn"):
+                if email_login and password_login:
+                    user, err = login(email_login, password_login)
+                    if err:
+                        st.error(err)
+                    else:
+                        st.success("Logged in successfully!")
+                        st.rerun()
+                else:
+                    st.warning("Please enter email and password.")
+
+        with col2:
+            if st.button("Continue as Guest", use_container_width=True, key="guest_btn"):
+                st.session_state.is_guest = True
+                st.session_state.user = None
+                st.session_state.profile = None
                 st.rerun()
+
+    # --------- SIGNUP TAB ----------
+    with tabs[1]:
+        st.subheader("Sign Up")
+        st.caption("Create a free NexStudy account.")
+        username_signup = st.text_input("Username", key="signup_username")
+        email_signup = st.text_input("Email", key="signup_email")
+        password_signup = st.text_input("Password", type="password", key="signup_password")
+
+        if st.button("Create Account", type="primary", use_container_width=True, key="signup_btn"):
+            if username_signup and email_signup and password_signup:
+                ok, err = signup(email_signup, password_signup, username_signup)
+                if ok:
+                    st.success("Account created and logged in!")
+                    st.rerun()
+                else:
+                    st.error(err or "Could not sign up.")
             else:
-                st.warning("Please enter an email.")
+                st.warning("Please fill all fields.")
 
-    with col2:
-        if st.button("Continue as Guest", use_container_width=True):
-            st.session_state.is_guest = True
-            st.rerun()
-
-# Trigger dialog
+# Trigger dialog if no user and not guest
 if (
-    not st.session_state.user_email
+    not st.session_state.user
     and not st.session_state.is_guest
     and not st.session_state.auth_dialog_shown
 ):
@@ -184,10 +267,18 @@ with col_logo:
 with col_title:
     st.title("NexStudy")
 
-    if st.session_state.user_email:
-        st.caption(f"👋 Welcome back, {st.session_state.user_email}")
+    # Greeting
+    if st.session_state.user:
+        name = st.session_state.profile["username"] if st.session_state.profile else st.session_state.user.get("email", "")
+        st.caption(f"👋 Welcome back, {name}")
     elif st.session_state.is_guest:
-        st.caption("👀 Browsing as Guest")
+        # guest label
+        guest_name = ""
+        if st.session_state.profile and st.session_state.profile.get("username"):
+            guest_name = st.session_state.profile["username"]
+        st.caption(f"👀 Browsing as Guest {guest_name}")
+    else:
+        st.caption("🚀 Sign in above to save your progress")
 
     st.write("### The Unlimited, Free AI Academic Companion")
     st.markdown(
@@ -266,9 +357,15 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("🌐 **[Official Website](https://studywith-nexstudy.vercel.app/)**")
 
-    if st.session_state.user_email:
+    if st.session_state.user:
         if st.button("Log Out"):
-            st.session_state.user_email = None
+            # Supabase sign out (optional – mostly affects tokens)
+            try:
+                supabase.auth.sign_out()
+            except Exception:
+                pass
+            st.session_state.user = None
+            st.session_state.profile = None
             st.session_state.is_guest = False
             st.session_state.auth_dialog_shown = False
             st.rerun()
@@ -276,6 +373,7 @@ with st.sidebar:
         if st.button("Log In / Sign Up"):
             st.session_state.is_guest = False
             st.session_state.auth_dialog_shown = False
+            st.session_state.auth_mode = "login"
             st.rerun()
 
 # ---------------- Footer ----------------
