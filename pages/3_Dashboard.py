@@ -39,7 +39,8 @@ def update_profile_db(user_id, updates):
     try:
         supabase.table("profiles").update(updates).eq("id", user_id).execute()
     except Exception as e:
-        st.error(f"Failed to sync data: {e}")
+        # st.error(f"Failed to sync data: {e}")
+        pass
 
 # ---------------- Helper: Load Stats ----------------
 def load_user_data(user):
@@ -63,11 +64,13 @@ def load_user_data(user):
         data["doubts_solved"] = len([m for m in msgs if m["role"] == "user"])
         data["plans_created"] = 1 if st.session_state.get("session_plan_meta") else 0
         data["audio_generated"] = 1 if st.session_state.get("podcast_script") else 0
-        data["todos"] = st.session_state.get("todos", [])
         
-        # Simple streak logic for guest
+        # Streak logic for guest (Session based)
         activity_count = data["doubts_solved"] + data["plans_created"] + data["audio_generated"]
         data["streak"] = 1 if activity_count > 0 else 0
+        
+        # Load guest todos
+        data["todos"] = st.session_state.get("todos", [])
         return data
 
     # 2. LOGGED IN MODE (Supabase)
