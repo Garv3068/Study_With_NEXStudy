@@ -3,10 +3,23 @@ import pandas as pd
 import datetime
 import os
 import json
+from supabase import create_client, Client
 
 # ---------------- Page Config ----------------
 st.set_page_config(page_title="My Dashboard", page_icon="📊", layout="wide")
 st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
+
+# ---------------- Supabase Client ----------------
+@st.cache_resource
+def get_supabase() -> Client:
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_ANON_KEY"]
+        return create_client(url, key)
+    except Exception as e:
+        return None
+
+supabase = get_supabase()
 
 # ---------------- Logo Logic ----------------
 if os.path.exists("logo.png"):
@@ -18,39 +31,66 @@ st.title("📊 Personal Performance Dashboard")
 st.caption("Track your learning progress across NexStudy tools.")
 
 # ---------------- Helper: Load Stats ----------------
-def load_user_stats(email):
-    # In a real app with a database, we would load historical data here.
-    # For now, we calculate stats from the CURRENT active session.
-    
-    # Count user messages in chat
+def load_user_stats(user):
+    # Default stats (for guests or new users)
+    stats = {
+        "doubts_solved": 0,
+        "plans_created": 0,
+        "audio_generated": 0,
+        "streak": 0,
+        "pending_todos": 0,
+        "completed_todos": 0
+    }
+
+    # 1. Get Session Stats (Always available)
     msgs = st.session_state.get("messages", [])
-    doubts_count = len([m for m in msgs if m["role"] == "user"])
+    session_doubts = len([m for m in msgs if m["role"] == "user"])
     
-    # Check if other features were used
     has_plan = 1 if st.session_state.get("session_plan_meta") else 0
     has_audio = 1 if st.session_state.get("podcast_script") else 0
     
-    # Get To-Do stats
+    # Get To-Do stats from session
     todos = st.session_state.get("todos", [])
     pending_todos = len([t for t in todos if not t["done"]])
     completed_todos = len([t for t in todos if t["done"]])
+
+    # 2. Get Persistent Stats from Supabase (if logged in)
+    if user and supabase:
+        try:
+            # Fetch profile data
+            res = supabase.table("profiles").select("*").eq("id", user["id"]).single().execute()
+            if res.data:
+                profile = res.data
+                # Assuming you might store these in profile later. 
+                # For now, we'll use session data but you can expand this.
+                # Example: stats["streak"] = profile.get("streak", 0)
+                pass
+        except Exception:
+            pass
+
+    # Combine/Update stats
+    stats["doubts_solved"] = session_doubts
+    stats["plans_created"] = has_plan
+    stats["audio_generated"] = has_audio
+    stats["pending_todos"] = pending_todos
+    stats["completed_todos"] = completed_todos
     
-    # Streak logic (Mock for guest, or calculate real for DB)
-    streak = 1 if (doubts_count + has_plan + has_audio + len(todos)) > 0 else 0
+    # Simple streak logic (Mock calculation)
+    activity_count = session_doubts + has_plan + has_audio + len(todos)
+    stats["streak"] = 1 if activity_count > 0 else 0
     
-    return {
-        "doubts_solved": doubts_count,
-        "plans_created": has_plan,
-        "audio_generated": has_audio,
-        "streak": streak,
-        "pending_todos": pending_todos,
-        "completed_todos": completed_todos
-    }
+    return stats
 
 # ---------------- User State ----------------
-user_email = st.session_state.get("user_email")
-display_user = user_email if user_email else "Guest"
-stats = load_user_stats(display_user)
+user = st.session_state.get("user")
+stats = load_user_stats(user)
+
+# Display User Name
+if user:
+    username = user.get("email", "User").split("@")[0]
+    st.subheader(f"Welcome back, {username} 👋")
+else:
+    st.subheader("Welcome, Guest 👋")
 
 # ---------------- Top Metrics Row ----------------
 col1, col2, col3, col4, col5 = st.columns(5)
@@ -102,7 +142,7 @@ with grid_col1:
     
     st.line_chart(chart_data.set_index('Day'))
     
-    if not user_email:
+    if not user:
         st.caption("👀 You are viewing **Guest Data** (Current Session Only). Sign in to save history.")
 
 # === RIGHT COLUMN: Quick Actions & History ===
@@ -117,6 +157,7 @@ with grid_col2:
             st.markdown(f"- ⬜ {t['task']}")
         if len(pending) > 3:
             st.caption(f"...and {len(pending) - 3} more.")
+        
         if st.button("Manage Tasks"):
             st.switch_page("pages/6_Study_Planner.py")
     else:
