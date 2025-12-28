@@ -30,6 +30,7 @@ def get_supabase() -> Client:
         key = st.secrets["SUPABASE_ANON_KEY"]
         return create_client(url, key)
     except Exception as e:
+        st.error(f"Supabase connection failed: {e}")
         return None
 
 supabase = get_supabase()
@@ -160,9 +161,11 @@ def fetch_saved_plans():
     if not user or not supabase: return []
     try:
         res = supabase.table("profiles").select("saved_plans").eq("id", user["id"]).single().execute()
-        if res.data and res.data.get("saved_plans"):
-            return res.data["saved_plans"]
-    except: pass
+        if res.data:
+            return res.data.get("saved_plans") or []
+    except Exception as e:
+        # st.error(f"Error fetching plans: {e}")
+        pass
     return []
 
 def save_plan_to_db(plan_package):
@@ -171,17 +174,21 @@ def save_plan_to_db(plan_package):
     try:
         current_plans = fetch_saved_plans()
         # Add timestamp title if missing
-        plan_package["title"] = f"Plan {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        if "title" not in plan_package:
+            plan_package["title"] = f"Plan {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        
         current_plans.append(plan_package)
         
         # Update DB
         supabase.table("profiles").update({"saved_plans": current_plans}).eq("id", user["id"]).execute()
         
-        # Increment plans_created count
+        # Optional: Increment plans_created count if column exists
         try:
-            supabase.rpc("increment_plans_created", {"user_id": user["id"]}).execute()
+            # We first get current count
+            res = supabase.table("profiles").select("plans_created").eq("id", user["id"]).single().execute()
+            current_count = res.data.get("plans_created", 0) or 0
+            supabase.table("profiles").update({"plans_created": current_count + 1}).eq("id", user["id"]).execute()
         except: 
-            # Fallback if RPC doesn't exist, manual increment
             pass
             
         return True
@@ -194,7 +201,8 @@ def sync_todos():
     if user and supabase:
         try:
             supabase.table("profiles").update({"todos": st.session_state.todos}).eq("id", user["id"]).execute()
-        except: pass
+        except Exception as e:
+            st.warning(f"Could not sync todos: {e}")
 
 # ---------------- To-Do List Helpers ----------------
 def add_todo():
@@ -297,8 +305,7 @@ with col_right:
         st.markdown("### My Study Tasks")
         st.caption("Add your own manual tasks here. Synced to your account.")
         
-        # Load todos from session (which is synced with DB in Dashboard)
-        # Check if we need to fetch initial state if not present
+        # Load todos from Supabase if logged in and session todos empty
         if user and not st.session_state.todos:
              try:
                  res = supabase.table("profiles").select("todos").eq("id", user["id"]).single().execute()
@@ -344,9 +351,9 @@ if 'generate' in locals() and generate:
         # Calculate days left
         days_left = (exam_dt - today_dt).days
         if days_left <= (prefer_review_days + 1):
-            st.warning("Too few days left for revision.")
+            st.warning("Too few days left for the selected revision days. Reduce revision days or choose later exam date.")
         else:
-            # Prepare prompt
+            # Prepare prompt for Gemini
             topics = [t.strip() for t in final_syllabus.splitlines() if t.strip()]
             if len(topics) < 3:
                 topics = [t.strip() for t in final_syllabus.replace("\n",",").split(",") if t.strip()]
@@ -362,7 +369,7 @@ if 'generate' in locals() and generate:
             }
 
             prompt = f"""
-            Act as an expert study planner.
+            You are an expert study planner.
             Context: Exam in {days_left} days. Daily hours: {daily_hours}.
             Topics: {json.dumps(topics[:300], ensure_ascii=False)}
             Focus: {plan_meta['focus_areas']}
