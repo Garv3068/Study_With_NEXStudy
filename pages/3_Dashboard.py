@@ -220,11 +220,11 @@ with grid_col2:
                 st.markdown(f"❓ *{msg[:40]}...*")
             
             if st.button("Continue Chatting"):
-                st.switch_page("pages/2_NexStudy.py")
+                st.switch_page("pages/1_AI_Tutor.py")
         else:
             st.info("No questions asked in this session.")
     else:
-        st.markdown("[👉 Start Chatting](pages/2_NexStudy.py)")
+        st.markdown("[👉 Start Chatting](pages/1_AI_Tutor.py)")
 
 # ---------------- Footer / Goals ----------------
 st.markdown("---")
