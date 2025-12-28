@@ -3,9 +3,9 @@ import google.generativeai as genai
 import pdfplumber
 import os
 import datetime
-import io
 import json
 from datetime import date, timedelta
+from supabase import create_client, Client
 
 # ---------------- Page config ----------------
 st.set_page_config(page_title="NexStudy — Study Planner Pro", page_icon="📅", layout="wide")
@@ -22,9 +22,17 @@ elif os.path.exists("logo.jpg"):
 st.title("📅 NexStudy — Study Planner (Pro)")
 st.write("Pro features: save/load plans, intensity control, ICS export, and AI customization.")
 
-# ---------------- Ensure storage folder ----------------
-SAVE_DIR = "nexstudy_plans"
-os.makedirs(SAVE_DIR, exist_ok=True)
+# ---------------- Supabase Client ----------------
+@st.cache_resource
+def get_supabase() -> Client:
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_ANON_KEY"]
+        return create_client(url, key)
+    except Exception as e:
+        return None
+
+supabase = get_supabase()
 
 # ---------------- Session State Init ----------------
 if "todos" not in st.session_state:
@@ -33,12 +41,9 @@ if "todos" not in st.session_state:
 # ---------------- Gemini Initialization ----------------
 @st.cache_resource
 def init_gemini(api_key_input: str | None = None):
-    key = None
+    key = api_key_input
     # 1. Prefer input key
-    if api_key_input:
-        key = api_key_input
-    # 2. Else check secrets
-    else:
+    if not key:
         try:
             key = st.secrets.get("GEMINI_API_KEY")
         except Exception:
@@ -66,19 +71,16 @@ with st.sidebar:
     api_key = None
     if "GEMINI_API_KEY" in st.secrets:
         api_key = st.secrets["GEMINI_API_KEY"]
-        # st.success("✅ API Key loaded from secrets")
     else:
         api_key = st.text_input("Enter Gemini API Key:", type="password")
 
-    # st.markdown("---")
     st.header("🛠️ Planner Options")
     st.checkbox("Enable verbose plan (more detail)", value=True, key="verbose_plan")
     
-    # User Info from Session State (Central Login)
-    user_email = st.session_state.get("user_email")
-    if user_email:
-        st.info(f"Logged in as: {user_email}")
-        st.caption(f"Plans save to: {SAVE_DIR}")
+    # User Info from Session State
+    user = st.session_state.get("user")
+    if user:
+        st.info(f"Logged in as: {user.get('email')}")
     else:
         st.warning("You are in Guest Mode. Sign in on the Home page to save plans permanently.")
 
@@ -126,31 +128,6 @@ def generate_plan_markdown(plan_meta: dict, day_plan: list) -> str:
     header += "\n".join([f"- {p}" for p in plan_meta.get("strategy", [])])
     return header
 
-def save_plan_to_disk(email: str, plan_data: dict) -> str:
-    """Saves the plan JSON to SAVE_DIR and returns filepath"""
-    safe_email = email.replace("@","_at_").replace(".","_")
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"plan_{safe_email}_{timestamp}.json"
-    path = os.path.join(SAVE_DIR, filename)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(plan_data, f, indent=2)
-    return path
-
-def list_saved_plans(email: str) -> list:
-    """Return list of saved plan files for this email (sorted newest first)"""
-    files = []
-    safe = email.replace("@","_at_").replace(".","_")
-    if os.path.exists(SAVE_DIR):
-        for fname in os.listdir(SAVE_DIR):
-            if fname.startswith(f"plan_{safe}_"):
-                files.append(os.path.join(SAVE_DIR, fname))
-    files.sort(reverse=True)
-    return files
-
-def load_plan_from_file(path: str) -> dict:
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
 def create_ics(plan_meta: dict, day_plan: list) -> str:
     """Return content for an .ics file (string) representing daily study events."""
     lines = [
@@ -177,18 +154,63 @@ def create_ics(plan_meta: dict, day_plan: list) -> str:
     lines.append("END:VCALENDAR")
     return "\n".join(lines)
 
+# ---------------- Database Functions ----------------
+def fetch_saved_plans():
+    """Fetch saved_plans array from Supabase profiles"""
+    if not user or not supabase: return []
+    try:
+        res = supabase.table("profiles").select("saved_plans").eq("id", user["id"]).single().execute()
+        if res.data and res.data.get("saved_plans"):
+            return res.data["saved_plans"]
+    except: pass
+    return []
+
+def save_plan_to_db(plan_package):
+    """Append new plan to saved_plans in Supabase"""
+    if not user or not supabase: return
+    try:
+        current_plans = fetch_saved_plans()
+        # Add timestamp title if missing
+        plan_package["title"] = f"Plan {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        current_plans.append(plan_package)
+        
+        # Update DB
+        supabase.table("profiles").update({"saved_plans": current_plans}).eq("id", user["id"]).execute()
+        
+        # Increment plans_created count
+        try:
+            supabase.rpc("increment_plans_created", {"user_id": user["id"]}).execute()
+        except: 
+            # Fallback if RPC doesn't exist, manual increment
+            pass
+            
+        return True
+    except Exception as e:
+        st.error(f"Save failed: {e}")
+        return False
+
+def sync_todos():
+    """Sync todos to Supabase"""
+    if user and supabase:
+        try:
+            supabase.table("profiles").update({"todos": st.session_state.todos}).eq("id", user["id"]).execute()
+        except: pass
+
 # ---------------- To-Do List Helpers ----------------
 def add_todo():
     task = st.session_state.new_todo
     if task:
         st.session_state.todos.append({"task": task, "done": False})
         st.session_state.new_todo = "" # Clear input
+        sync_todos()
 
 def toggle_todo(index):
     st.session_state.todos[index]["done"] = not st.session_state.todos[index]["done"]
+    sync_todos()
 
 def delete_todo(index):
     st.session_state.todos.pop(index)
+    sync_todos()
     st.rerun()
 
 # ---------------- UI: Planner form ----------------
@@ -215,16 +237,19 @@ with col_left:
         prefer_review_days = st.number_input("Reserve days before exam for revision:", min_value=0, max_value=30, value=7)
         generate = st.form_submit_button("🚀 Generate Pro Plan")
 
-    # Only show Saved Plans if logged in
-    if user_email:
+    # Show Saved Plans if logged in
+    if user and supabase:
         st.markdown("---")
         st.subheader("Saved Plans")
-        files = list_saved_plans(user_email)
-        if files:
-            sel = st.selectbox("Load a saved plan:", ["-- select saved plan --"] + files)
-            if sel and sel != "-- select saved plan --":
+        saved_plans = fetch_saved_plans()
+        if saved_plans:
+            # Create a dict for easy lookup
+            plan_options = {p.get("title", f"Plan {i}"): p for i, p in enumerate(saved_plans)}
+            sel_name = st.selectbox("Load a saved plan:", ["-- select saved plan --"] + list(plan_options.keys()))
+            
+            if sel_name and sel_name != "-- select saved plan --":
                 if st.button("Load selected plan"):
-                    loaded = load_plan_from_file(sel)
+                    loaded = plan_options[sel_name]
                     st.session_state["loaded_plan"] = loaded
                     st.success("Loaded plan into view.")
                     st.rerun()
@@ -236,34 +261,51 @@ with col_right:
     tab_plan, tab_todo = st.tabs(["📅 AI Study Plan", "✅ Personal To-Do"])
     
     with tab_plan:
-        # If a plan has been loaded externally, show that
-        if st.session_state.get("loaded_plan"):
-            plan_obj = st.session_state.get("loaded_plan")
-            md = plan_obj.get("markdown", "")
-            st.markdown("### Loaded plan")
-            st.markdown(md)
-            st.download_button("Download loaded plan (MD)", data=md, file_name="loaded_plan.md", mime="text/markdown")
-            # Offer ICS too if present
-            if st.button("Download loaded plan as ICS"):
-                ics_content = create_ics(plan_obj.get("meta",{}), plan_obj.get("days", []))
-                st.download_button("Download ICS", data=ics_content, file_name="loaded_plan.ics", mime="text/calendar")
+        # Check if we have a loaded plan OR a newly generated one
+        display_plan = st.session_state.get("loaded_plan") or {
+            "markdown": st.session_state.get("session_plan_markdown"),
+            "meta": st.session_state.get("session_plan_meta"),
+            "days": st.session_state.get("session_plan_days")
+        }
+
+        if display_plan.get("markdown"):
+            st.markdown("### Active Plan")
+            st.markdown(display_plan["markdown"])
             
-            if st.button("Clear Loaded Plan"):
-                del st.session_state["loaded_plan"]
-                st.rerun()
+            c1, c2 = st.columns(2)
+            with c1:
+                st.download_button("Download (MD)", data=display_plan["markdown"], file_name="NexStudy_Plan.md", mime="text/markdown")
+            with c2:
+                if st.button("Download (ICS)"):
+                    ics_content = create_ics(display_plan.get("meta",{}), display_plan.get("days", []))
+                    st.download_button("Click to Download ICS", data=ics_content, file_name="NexStudy_Plan.ics", mime="text/calendar")
+            
+            if user:
+                if st.button("💾 Save this Plan to Cloud"):
+                    success = save_plan_to_db(display_plan)
+                    if success:
+                        st.success("Plan Saved!")
+                        st.rerun()
                 
+                if st.session_state.get("loaded_plan") and st.button("Clear View"):
+                    del st.session_state["loaded_plan"]
+                    st.rerun()
         else:
-            # Show instructions or existing session plan
-            if "session_plan_markdown" in st.session_state:
-                st.markdown("### Current generated plan (unsaved)")
-                st.markdown(st.session_state["session_plan_markdown"])
-            else:
-                st.info("After you fill the configuration and click Generate, the plan will appear here.")
+            st.info("After you fill the configuration and click Generate, the plan will appear here.")
 
     with tab_todo:
         st.markdown("### My Study Tasks")
-        st.caption("Add your own manual tasks here (not synced with AI plan).")
+        st.caption("Add your own manual tasks here. Synced to your account.")
         
+        # Load todos from session (which is synced with DB in Dashboard)
+        # Check if we need to fetch initial state if not present
+        if user and not st.session_state.todos:
+             try:
+                 res = supabase.table("profiles").select("todos").eq("id", user["id"]).single().execute()
+                 if res.data and res.data.get("todos"):
+                     st.session_state.todos = res.data["todos"]
+             except: pass
+
         # Add Todo Input
         st.text_input("Add a new task:", key="new_todo", on_change=add_todo, placeholder="e.g. Read Chapter 4 by tonight")
         
@@ -273,7 +315,6 @@ with col_right:
             for i, todo in enumerate(st.session_state.todos):
                 c1, c2, c3 = st.columns([0.1, 0.8, 0.1])
                 with c1:
-                    # Checkbox updates session state directly via on_change
                     st.checkbox("", value=todo["done"], key=f"todo_{i}", on_change=toggle_todo, args=(i,))
                 with c2:
                     if todo["done"]:
@@ -286,9 +327,10 @@ with col_right:
             
             if st.button("Clear Completed Tasks"):
                 st.session_state.todos = [t for t in st.session_state.todos if not t["done"]]
+                sync_todos()
                 st.rerun()
         else:
-            st.info("No tasks yet. Add one above to get started!")
+            st.info("No tasks yet.")
 
 # ---------------- Generate plan logic ----------------
 if 'generate' in locals() and generate:
@@ -302,16 +344,16 @@ if 'generate' in locals() and generate:
         # Calculate days left
         days_left = (exam_dt - today_dt).days
         if days_left <= (prefer_review_days + 1):
-            st.warning("Too few days left for the selected revision days. Reduce revision days or choose later exam date.")
+            st.warning("Too few days left for revision.")
         else:
-            # Prepare prompt for Gemini
+            # Prepare prompt
             topics = [t.strip() for t in final_syllabus.splitlines() if t.strip()]
-            if not topics or len(topics) < 3:
+            if len(topics) < 3:
                 topics = [t.strip() for t in final_syllabus.replace("\n",",").split(",") if t.strip()]
 
             plan_meta = {
                 "name": name or "Student",
-                "email": user_email or "local",
+                "email": user.get("email") if user else "local",
                 "exam_date": exam_dt.strftime("%Y-%m-%d"),
                 "days_left": days_left,
                 "daily_hours": daily_hours,
@@ -319,87 +361,69 @@ if 'generate' in locals() and generate:
                 "focus_areas": [f.strip() for f in focus_areas.split(",") if f.strip()],
             }
 
-            # Formulate the prompt
             prompt = f"""
-            You are an expert study strategist. Create a day-by-day study plan given the following constraints.
-
-            Syllabus topics (short list):
-            {json.dumps(topics[:200], ensure_ascii=False)}
-
-            Exam date: {exam_dt.strftime('%Y-%m-%d')}
-            Days remaining: {days_left}
-            Daily study hours: {daily_hours}
-            Intensity: {intensity}
-            Reserve {prefer_review_days} days at the end for revision.
-            Focus areas (prioritize these): {plan_meta['focus_areas']}
-
-            Output a strictly valid JSON with:
-            - "quote": motivational short sentence
-            - "strategy": list of 3 quick bullet points
-            - "days": list of objects with keys: "date" (YYYY-MM-DD), "topic", "activity" (Read/Practice/Revise), "duration_hours"
-            Return only JSON.
+            Act as an expert study planner.
+            Context: Exam in {days_left} days. Daily hours: {daily_hours}.
+            Topics: {json.dumps(topics[:300], ensure_ascii=False)}
+            Focus: {plan_meta['focus_areas']}
+            
+            Task: Create a daily schedule.
+            Output JSON ONLY:
+            {{
+                "quote": "string",
+                "strategy": ["string", "string"],
+                "days": [
+                    {{"date": "YYYY-MM-DD", "topic": "string", "activity": "string", "duration_hours": int}}
+                ]
+            }}
             """
             
             # Call Gemini
             with st.spinner("Generating plan (Pro AI)..."):
-                # Enforce JSON mode for reliability
+                # Enforce JSON mode
                 res = call_gemini(prompt, generation_config={"response_mime_type": "application/json"})
+                
                 if res.get("error"):
                     st.error(f"AI Error: {res['error']}")
                 else:
                     raw = res["text"].strip()
+                    # Clean markdown code blocks if present
+                    if "```" in raw:
+                        raw = raw.replace("```json", "").replace("```", "")
+                    
                     try:
                         parsed = json.loads(raw)
-                    except Exception as e:
-                        st.error("Failed to parse AI output as JSON.")
-                        st.code(raw)
-                        parsed = None
-
-                    if parsed:
-                        # Compose day plan markdown and meta
-                        days = parsed.get("days", [])
-                        days = days[:days_left] # limit days to days_left
                         
-                        plan_meta["quote"] = parsed.get("quote", "Stay consistent.")
-                        plan_meta["strategy"] = parsed.get("strategy", ["Focus on weak areas"])
+                        # Process Data
+                        days = parsed.get("days", [])
+                        # Ensure we don't exceed days_left
+                        days = days[:days_left]
+                        
+                        plan_meta["quote"] = parsed.get("quote", "Keep going!")
+                        plan_meta["strategy"] = parsed.get("strategy", [])
 
                         md_days = []
                         for d in days:
                             md_days.append({
-                                "date": d.get("date"), 
-                                "topic": d.get("topic", "Topic"), 
+                                "date": d.get("date", "Unknown"), 
+                                "topic": d.get("topic", "Review"), 
                                 "activity": d.get("activity", "Study"), 
                                 "duration_hours": d.get("duration_hours", daily_hours)
                             })
 
                         md_text = generate_plan_markdown(plan_meta, md_days)
 
-                        # store in session_state
+                        # Save to session
                         st.session_state["session_plan_meta"] = plan_meta
                         st.session_state["session_plan_days"] = md_days
                         st.session_state["session_plan_markdown"] = md_text
+                        
+                        # Clear any loaded plan so the new one shows
+                        if "loaded_plan" in st.session_state:
+                            del st.session_state["loaded_plan"]
 
                         st.success("✅ Plan generated.")
                         st.rerun()
-
-# ---------------- Actions: Save, Export, ICS ----------------
-if st.session_state.get("session_plan_markdown"):
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Plan Actions")
-    if user_email:
-        if st.sidebar.button("Save Plan (to server)"):
-            plan_package = {
-                "meta": st.session_state.get("session_plan_meta", {}),
-                "days": st.session_state.get("session_plan_days", []),
-                "markdown": st.session_state.get("session_plan_markdown", "")
-            }
-            saved_path = save_plan_to_disk(user_email, plan_package)
-            st.sidebar.success(f"Saved!")
-    
-    st.sidebar.download_button("Download Plan (MD)", data=st.session_state["session_plan_markdown"],
-                               file_name="NexStudy_Plan.md", mime="text/markdown")
-    
-    if st.sidebar.button("Download Plan (ICS)"):
-        ics = create_ics(st.session_state.get("session_plan_meta", {}), st.session_state.get("session_plan_days", []))
-        st.sidebar.download_button("Download ICS file", data=ics, file_name="NexStudy_Plan.ics", mime="text/calendar")
-        st.sidebar.success("ICS generated.")
+                        
+                    except Exception as e:
+                        st.error(f"Failed to parse plan. Raw output:\n{raw}")
