@@ -57,9 +57,9 @@ def init_gemini(api_key_input: str | None = None):
         genai.configure(api_key=key)
         # Try latest model, fallback to stable
         try:
-            return genai.GenerativeModel("gemini-2.0-flash")
+            return genai.GenerativeModel("gemini-2.5-flash-lite")
         except Exception:
-            return genai.GenerativeModel("gemini-1.5-flash")
+            return genai.GenerativeModel("gemini-2.5-flash")
     except Exception as e:
         st.error(f"Gemini initialization error: {e}")
         return None
