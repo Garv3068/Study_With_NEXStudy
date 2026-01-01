@@ -87,10 +87,10 @@ stats = load_user_stats(user)
 
 # Display User Name
 if st.session_state.user:
-        if st.session_state.profile and "username" in st.session_state.profile:
-            name = st.session_state.profile["username"]
-        else:
-            name = st.session_state.user.get("email", "")
+    if st.session_state.profile and "username" in st.session_state.profile:
+        name = st.session_state.profile["username"]
+    else:
+        name = st.session_state.user.get("email", "")
     st.subheader(f"Welcome back, {name} 👋")
 else:
     st.subheader("Welcome, Guest 👋")
