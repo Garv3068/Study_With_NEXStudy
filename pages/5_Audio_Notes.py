@@ -3,6 +3,9 @@ import google.generativeai as genai
 import pdfplumber
 import os
 import tempfile
+import datetime
+import json
+from supabase import create_client, Client
 
 # Try importing gTTS (Google Text-to-Speech)
 try:
@@ -15,15 +18,75 @@ except ImportError:
 st.set_page_config(page_title="Audio Notes", page_icon="🎧", layout="wide")
 st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
 
-# Optional logo
-# _logo_path = "/mnt/data/A_logo_for_EduNex,_an_AI-powered_smart_study_assis.png"
-# if os.path.exists(_logo_path):
-    # st.image(_logo_path, width=150)
-if os.path.exists("image.png"):
-    st.image("image.png", width=200)
+# ---------------- Logo Logic ----------------
+if os.path.exists("assets/image.png"):
+    st.image("assets/image.png", width=150)
+elif os.path.exists("logo.png"):
+    st.image("logo.png", width=150)
+elif os.path.exists("logo.jpg"):
+    st.image("logo.jpg", width=150)
 
 st.title("🎧 Audio Notes Studio")
 st.caption("Convert text to audio podcasts OR transcribe lecture recordings into notes.")
+
+# ---------------- Supabase Client ----------------
+@st.cache_resource
+def get_supabase() -> Client:
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_ANON_KEY"]
+        return create_client(url, key)
+    except Exception as e:
+        return None
+
+supabase = get_supabase()
+
+# ---------------- Session State ----------------
+user = st.session_state.get("user")
+
+if "podcast_script" not in st.session_state:
+    st.session_state.podcast_script = ""
+if "audio_file_path" not in st.session_state:
+    st.session_state.audio_file_path = None
+if "transcription_result" not in st.session_state:
+    st.session_state.transcription_result = ""
+
+# ---------------- Database Functions ----------------
+def fetch_saved_audio():
+    """Fetch saved_audio array from Supabase profiles"""
+    if not user or not supabase: return []
+    try:
+        res = supabase.table("profiles").select("saved_audio").eq("id", user["id"]).single().execute()
+        if res.data and res.data.get("saved_audio"):
+            return res.data["saved_audio"]
+    except: pass
+    return []
+
+def save_audio_entry(entry):
+    """Append new audio/transcript entry to saved_audio in Supabase"""
+    if not user or not supabase: return False
+    try:
+        current_data = fetch_saved_audio()
+        # Add timestamp title if missing
+        if "title" not in entry:
+            entry["title"] = f"Audio Note {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        
+        current_data.append(entry)
+        
+        # Update DB
+        supabase.table("profiles").update({"saved_audio": current_data}).eq("id", user["id"]).execute()
+        
+        # Update stats
+        try:
+            res = supabase.table("profiles").select("audio_generated").eq("id", user["id"]).single().execute()
+            count = res.data.get("audio_generated", 0) or 0
+            supabase.table("profiles").update({"audio_generated": count + 1}).eq("id", user["id"]).execute()
+        except: pass
+            
+        return True
+    except Exception as e:
+        st.error(f"Save failed: {e}")
+        return False
 
 # ---------------- Gemini Initialization ----------------
 @st.cache_resource
@@ -47,31 +110,24 @@ def init_gemini(api_key_input):
 
 # ---------------- Sidebar ----------------
 with st.sidebar:
-    # st.header("⚙️ Settings")
+    st.header("⚙️ Settings")
     
-    # Check for API Key
-    has_secret_key = False
-    try:
-        if st.secrets.get("GEMINI_API_KEY"):
-            has_secret_key = True
-    except:
-        pass
-
-    user_api_key = ""
-    if not has_secret_key:
-        st.warning("⚠️ No API Key found.")
-        user_api_key = st.text_input("Enter Gemini API Key:", type="password")
-    # else:
-        # st.success("✅ API Key loaded")
+    if user:
+        st.success(f"Logged in: {user.get('email')}")
+    else:
+        st.warning("Guest Mode. Sign in to save audio notes.")
+    
+    api_key_input = None
+    if "GEMINI_API_KEY" in st.secrets:
+        api_key_input = st.secrets["GEMINI_API_KEY"]
+    else:
+        api_key_input = st.text_input("Enter Gemini API Key:", type="password")
     
     st.divider()
-    
-    # Check libraries
     if not HAS_GTTS:
-        st.error("⚠️ `gTTS` library missing.")
-        st.info("Run `pip install gTTS` to use the Podcaster feature.")
+        st.error("⚠️ `gTTS` library missing. Run `pip install gTTS`.")
 
-gemini_model = init_gemini(user_api_key)
+gemini_model = init_gemini(api_key_input)
 
 # ---------------- Helpers ----------------
 def extract_text_from_pdf(uploaded_file):
@@ -98,16 +154,8 @@ def text_to_speech(text, slow=False):
         st.error(f"Audio Generation Error: {e}")
         return None
 
-# ---------------- Session State ----------------
-if "podcast_script" not in st.session_state:
-    st.session_state.podcast_script = ""
-if "audio_file_path" not in st.session_state:
-    st.session_state.audio_file_path = None
-if "transcription_result" not in st.session_state:
-    st.session_state.transcription_result = ""
-
 # ---------------- TABS ----------------
-tab1, tab2 = st.tabs(["📝 Notes -> Audio (Podcaster)", "🎙️ Audio -> Notes (Transcriber)"])
+tab1, tab2, tab3 = st.tabs(["📝 Notes ➡️ Audio", "🎙️ Audio ➡️ Notes", "💾 Saved Library"])
 
 # =======================================================
 # TAB 1: TEXT TO AUDIO (PODCASTER)
@@ -130,10 +178,7 @@ with tab1:
 
         st.markdown("### 2. 🎭 Podcast Style")
         style = st.selectbox("Choose Persona:", [
-            "Friendly Teacher (Clear & Encouraging)",
-            "Curious Host (Conversational & Fun)",
-            "Strict Lecturer (Concise & Academic)",
-            "Storyteller (Narrative & Engaging)"
+            "Friendly Teacher", "Curious Host", "Strict Lecturer", "Storyteller"
         ])
         
         speed_check = st.checkbox("Slow Speed", value=False)
@@ -167,16 +212,27 @@ with tab1:
 
     # RIGHT: Player
     with col_output:
-        # st.markdown("### 🎧 Podcast Player")
+        st.markdown("### 🎧 Podcast Player")
         if st.session_state.audio_file_path:
             st.audio(st.session_state.audio_file_path, format="audio/mp3")
             with open(st.session_state.audio_file_path, "rb") as file:
                 st.download_button("📥 Download MP3", file, "Study_Podcast.mp3", "audio/mp3")
             
-            with st.expander("📜 View Script", expanded=False):
+            with st.expander("📜 View Script", expanded=True):
                 st.write(st.session_state.podcast_script)
-        # else:
-            # st.info("👈 Generate audio to listen here.")
+                
+            if user:
+                if st.button("💾 Save Script to Library"):
+                    entry = {
+                        "type": "podcast_script",
+                        "content": st.session_state.podcast_script,
+                        "date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                        "tags": [style]
+                    }
+                    if save_audio_entry(entry):
+                        st.success("Saved to Library!")
+        else:
+            st.info("👈 Generate audio to listen here.")
 
 # =======================================================
 # TAB 2: AUDIO TO NOTES (TRANSCRIBER)
@@ -189,69 +245,66 @@ with tab2:
     
     with col_up:
         uploaded_audio = st.file_uploader("Upload Audio:", type=["mp3", "wav", "m4a", "ogg"])
+        detail_level = st.select_slider("Summary Detail:", ["Brief", "Key Points", "Detailed"])
         
-        detail_level = st.select_slider(
-            "Summary Detail:", 
-            options=["Brief Overview", "Key Points Bulletins", "Detailed Study Notes"]
-        )
-        
-        if st.button("📝 Transcribe & Summarize", type="primary"):
+        if st.button("📝 Transcribe", type="primary"):
             if not uploaded_audio:
-                st.warning("Please upload an audio file first.")
+                st.warning("Upload audio first.")
             elif not gemini_model:
                 st.error("API Key missing.")
             else:
-                with st.spinner("🎧 Listening and analyzing... (This may take a minute)"):
+                with st.spinner("🎧 Analyzing..."):
                     try:
-                        # Prepare audio data for Gemini
                         audio_bytes = uploaded_audio.read()
-                        
                         prompt_text = f"""
-                        Listen to this audio file and transcribe it into {detail_level}.
-                        
-                        **Format Requirements:**
-                        1. **Title:** Give it a relevant title.
-                        2. **Summary:** A brief paragraph intro.
-                        3. **Key Concepts:** Use bullet points with bold headers.
-                        4. **Important Terms:** Define any technical terms mentioned.
-                        5. **Quiz:** 3 short review questions at the end.
+                        Listen to this audio. Transcribe and summarize it ({detail_level}).
+                        Format: Title, Summary, Key Concepts (Bullet points), Quiz (3 questions).
                         """
-                        
-                        # Gemini 1.5/2.0 accepts audio bytes directly
-                        content = [
-                            prompt_text,
-                            {
-                                "mime_type": uploaded_audio.type,
-                                "data": audio_bytes
-                            }
-                        ]
+                        content = [prompt_text, {"mime_type": uploaded_audio.type, "data": audio_bytes}]
                         
                         response = gemini_model.generate_content(content)
                         st.session_state.transcription_result = response.text
                         st.rerun()
-                        
                     except Exception as e:
-                        st.error(f"Processing Error: {str(e)}")
-                        st.info("Note: Large audio files (>20MB) may timeout in this demo.")
+                        st.error(f"Error: {e}")
 
     with col_res:
         if st.session_state.transcription_result:
-            st.markdown("### 📝 Generated Notes")
-            st.markdown("---")
             st.markdown(st.session_state.transcription_result)
+            st.download_button("📥 Download Notes", st.session_state.transcription_result, "Notes.md")
             
-            st.markdown("---")
-            st.download_button(
-                "📥 Download Notes", 
-                st.session_state.transcription_result, 
-                "Lecture_Notes.md", 
-                "text/markdown"
-            )
+            if user:
+                if st.button("💾 Save Notes to Library"):
+                    entry = {
+                        "type": "transcript",
+                        "content": st.session_state.transcription_result,
+                        "date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                        "title": f"Lecture Notes ({datetime.datetime.now().strftime('%m/%d')})"
+                    }
+                    if save_audio_entry(entry):
+                        st.success("Saved!")
         else:
-            st.info("👈 Upload a recording to generate notes.")
-            st.markdown("""
-            **Perfect for:**
-            - 🏛️ Recorded University Lectures
-            - 🗣️ Voice memos of your own ideas
-            - 📹 Podcast summaries
-            """)
+            st.info("👈 Upload audio to start.")
+
+# =======================================================
+# TAB 3: SAVED LIBRARY
+# =======================================================
+with tab3:
+    st.markdown("### 📚 Your Saved Audio & Notes")
+    if user and supabase:
+        saved_items = fetch_saved_audio()
+        if saved_items:
+            for i, item in enumerate(reversed(saved_items)):
+                with st.expander(f"{item.get('title', 'Untitled')} ({item.get('date')}) - {item.get('type')}"):
+                    st.markdown(item.get('content'))
+                    if item.get('type') == 'podcast_script':
+                        if st.button("🔄 Regenerate Audio", key=f"regen_{i}"):
+                            with st.spinner("Regenerating..."):
+                                path = text_to_speech(item['content'])
+                                st.session_state.audio_file_path = path
+                                st.session_state.podcast_script = item['content']
+                                st.rerun()
+        else:
+            st.info("Library is empty.")
+    else:
+        st.warning("Log in to view your library.")
