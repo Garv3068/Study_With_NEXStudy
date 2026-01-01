@@ -87,7 +87,8 @@ stats = load_user_stats(user)
 
 # Display User Name
 if user:
-    username = user.get("email", "User").split("@")[0]
+    # username = user.get("email", "User").split("@")[0]
+    username = user.get("username")
     st.subheader(f"Welcome back, {username} 👋")
 else:
     st.subheader("Welcome, Guest 👋")
