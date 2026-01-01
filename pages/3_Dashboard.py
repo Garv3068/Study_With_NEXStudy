@@ -86,6 +86,7 @@ user = st.session_state.get("user")
 stats = load_user_stats(user)
 
 # Display User Name
+
 if st.session_state.user:
     if st.session_state.profile and "username" in st.session_state.profile:
         name = st.session_state.profile["username"]
@@ -94,6 +95,7 @@ if st.session_state.user:
     st.subheader(f"Welcome back, {name} 👋")
 else:
     st.subheader("Welcome, Guest 👋")
+
 
 # ---------------- Top Metrics Row ----------------
 col1, col2, col3, col4, col5 = st.columns(5)
