@@ -91,7 +91,7 @@ if st.session_state.user:
             name = st.session_state.profile["username"]
         else:
             name = st.session_state.user.get("email", "")
-    st.subheader(f"Welcome back, {username} 👋")
+    st.subheader(f"Welcome back, {name} 👋")
 else:
     st.subheader("Welcome, Guest 👋")
 
