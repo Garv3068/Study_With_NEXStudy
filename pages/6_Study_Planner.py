@@ -352,6 +352,7 @@ if 'generate' in locals() and generate:
         days_left = (exam_dt - today_dt).days
         if days_left <= (prefer_review_days + 1):
             st.warning("Too few days left for the selected revision days. Reduce revision days or choose later exam date.")
+            # st.warning("Bro It is too late now. You may now take a drop from building itself.")
         else:
             # Prepare prompt for Gemini
             topics = [t.strip() for t in final_syllabus.splitlines() if t.strip()]
