@@ -98,7 +98,7 @@ def init_gemini(api_key_input):
     try:
         genai.configure(api_key=key)
         # 🚀 UPGRADE: Using the newer 2.5 Flash model
-        return genai.GenerativeModel("gemini-2.5-flash")
+        return genai.GenerativeModel("gemini-2.5-flash-lite")
     except Exception as e:
         st.error(f"Gemini initialization error: {e}")
         return None
@@ -235,7 +235,7 @@ with left:
         st.markdown("#### 🧠 Deep Dive")
         topic_input = st.text_input("Concept:", placeholder="e.g. Black Holes, Recursion")
         explanation_level = st.selectbox("Depth:", ["ELI5", "High School", "College", "PhD"])
-        include_links = st.checkbox("Include Video Search Links", value=True)
+        # include_links = st.checkbox("Include Video Search Links", value=True)
         
         if st.button("🚀 Explain", type="primary"):
             if not topic_input.strip():
@@ -244,8 +244,8 @@ with left:
                 st.session_state.current_topic_query = topic_input
                 # PROMPT FIX: Explicitly tell AI NOT to generate fake URLs
                 prompt = f"Explain '{topic_input}'. Level: {explanation_level}."
-                if include_links: 
-                    prompt += " Recommend 3 YouTube channels or video titles to watch. Do NOT provide direct links (URLs), just the names."
+                # if include_links: 
+                    # prompt += " Recommend 3 YouTube channels or video titles to watch. Do NOT provide direct links (URLs), just the names."
                 
                 if gemini_model:
                     with st.spinner("Explaining..."):
