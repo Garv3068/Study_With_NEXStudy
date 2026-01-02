@@ -11,16 +11,26 @@ from PIL import Image
 st.set_page_config(page_title="NexStudy Tutor", page_icon="🧠", layout="wide")
 st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
 
-# ---------------- Logo Logic ----------------
+# ---------------- Logo & Header Logic ----------------
+logo_path = None
 if os.path.exists("assets/image.png"):
-    st.image("assets/image.png", width=150)
+    logo_path = "assets/image.png"
 elif os.path.exists("logo.png"):
-    st.image("logo.png", width=150)
+    logo_path = "logo.png"
 elif os.path.exists("logo.jpg"):
-    st.image("logo.jpg", width=150)
+    logo_path = "logo.jpg"
 
-st.title("🧠 NexStudy AI Tutor")
-st.caption("Your personalized academic guide. Choose your learning style below.")
+col_logo, col_header = st.columns([1, 6])
+
+with col_logo:
+    if logo_path:
+        st.image(logo_path, width=100)
+    else:
+        st.write("🧠")
+
+with col_header:
+    st.title("NexStudy AI Tutor")
+    st.caption("Your personalized academic guide. Choose your learning style below.")
 
 # ---------------- Supabase Client ----------------
 @st.cache_resource
@@ -86,7 +96,7 @@ def init_gemini(api_key_input):
     try:
         genai.configure(api_key=key)
         # 🚀 UPGRADE: Using the newer 2.5 Flash model
-        return genai.GenerativeModel("gemini-2.5-flash")
+        return genai.GenerativeModel("gemini-2.5-flash-lite")
     except Exception as e:
         st.error(f"Gemini initialization error: {e}")
         return None
