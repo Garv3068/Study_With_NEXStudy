@@ -66,6 +66,8 @@ if "saved" not in st.session_state:
 
 if "topic_explanation" not in st.session_state:
     st.session_state.topic_explanation = ""
+if "current_topic_query" not in st.session_state:
+    st.session_state.current_topic_query = ""
 
 # ---------------- Database Helper ----------------
 def save_chat_to_db():
@@ -96,7 +98,7 @@ def init_gemini(api_key_input):
     try:
         genai.configure(api_key=key)
         # 🚀 UPGRADE: Using the newer 2.5 Flash model
-        return genai.GenerativeModel("gemini-2.5-flash-lite")
+        return genai.GenerativeModel("gemini-2.5-flash")
     except Exception as e:
         st.error(f"Gemini initialization error: {e}")
         return None
@@ -233,14 +235,17 @@ with left:
         st.markdown("#### 🧠 Deep Dive")
         topic_input = st.text_input("Concept:", placeholder="e.g. Black Holes, Recursion")
         explanation_level = st.selectbox("Depth:", ["ELI5", "High School", "College", "PhD"])
-        include_links = st.checkbox("Include Video Links", value=True)
+        include_links = st.checkbox("Include Video Search Links", value=True)
         
         if st.button("🚀 Explain", type="primary"):
             if not topic_input.strip():
                 st.warning("Enter a topic.")
             else:
+                st.session_state.current_topic_query = topic_input
+                # PROMPT FIX: Explicitly tell AI NOT to generate fake URLs
                 prompt = f"Explain '{topic_input}'. Level: {explanation_level}."
-                if include_links: prompt += " Include 3 YouTube resource links."
+                if include_links: 
+                    prompt += " Recommend 3 YouTube channels or video titles to watch. Do NOT provide direct links (URLs), just the names."
                 
                 if gemini_model:
                     with st.spinner("Explaining..."):
@@ -319,6 +324,7 @@ with right:
                     elif teaching_style == "Strict Professor (Deep theory)":
                         persona_instruction = "Be formal and academic. Focus on the underlying theory and definitions. Use precise terminology."
 
+                    # PROMPT FIX: Added strict instruction to avoid fake links
                     system_prompt = f"""
                     You are NexStudy, an expert AI Tutor.
                     **Current Teaching Style:** {teaching_style}
@@ -329,6 +335,8 @@ with right:
                     
                     **Task:** Answer the new user question/file below.
                     After your answer, suggest 3 short follow-up questions the student might want to ask next to deepen their understanding.
+                    
+                    **IMPORTANT:** Do NOT generate direct URL links (like youtube.com/...) as they are often incorrect/hallucinated. If you recommend a video, just give the Title and Channel Name.
                     """
                     
                     content_parts = [system_prompt]
@@ -369,7 +377,13 @@ with right:
         if st.session_state.topic_explanation:
             st.markdown("### 📝 Topic Guide")
             st.markdown(st.session_state.topic_explanation)
+            
+            # UI FIX: Provide a REAL working search button instead of fake links
             st.markdown("---")
+            if st.session_state.get("current_topic_query"):
+                search_term = st.session_state.current_topic_query.replace(' ', '+')
+                st.link_button("📺 Search This Topic on YouTube", f"https://www.youtube.com/results?search_query={search_term}")
+            
             if st.button("📋 Copy Text"):
                  st.code(st.session_state.topic_explanation)
         else:
