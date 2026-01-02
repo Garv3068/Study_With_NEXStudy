@@ -8,7 +8,7 @@ from supabase import create_client, Client
 from PIL import Image
 
 # ---------------- Page config ----------------
-st.set_page_config(page_title="NexStudy", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="NexStudy Tutor", page_icon="🧠", layout="wide")
 st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
 
 # ---------------- Logo Logic ----------------
@@ -19,8 +19,8 @@ elif os.path.exists("logo.png"):
 elif os.path.exists("logo.jpg"):
     st.image("logo.jpg", width=150)
 
-st.title("🧠 NexStudy")
-st.caption("Your personal AI academic companion. Solve doubts, learn topics, and master your syllabus.")
+st.title("🧠 NexStudy AI Tutor")
+st.caption("Your personalized academic guide. Choose your learning style below.")
 
 # ---------------- Supabase Client ----------------
 @st.cache_resource
@@ -62,8 +62,6 @@ def save_chat_to_db():
     """Saves current chat history to Supabase."""
     if user and supabase:
         try:
-            # We save the whole list. In production apps, you might append, 
-            # but replacing the JSON array is easier for this scale.
             supabase.table("profiles").update({"chat_history": st.session_state.messages}).eq("id", user["id"]).execute()
             
             # Also update the 'doubts_solved' count for the dashboard
@@ -87,14 +85,15 @@ def init_gemini(api_key_input):
 
     try:
         genai.configure(api_key=key)
-        return genai.GenerativeModel("gemini-2.5-flash-lite")
+        # 🚀 UPGRADE: Using the newer 2.5 Flash model
+        return genai.GenerativeModel("gemini-2.5-flash")
     except Exception as e:
         st.error(f"Gemini initialization error: {e}")
         return None
 
 # ---------------- Sidebar ----------------
 with st.sidebar:
-    st.header("⚙️ Settings")
+    st.header("⚙️ Tutor Settings")
     
     if user:
         st.success(f"Logged in: {user.get('email')}")
@@ -106,7 +105,23 @@ with st.sidebar:
     if "GEMINI_API_KEY" in st.secrets:
         api_key_input = st.secrets["GEMINI_API_KEY"]
     else:
-        api_key_input = st.text_input("Enter Gemini API Key:", type="password")
+        with st.expander("🔧 Advanced: Use Custom Key"):
+            api_key_input = st.text_input("Enter Gemini API Key:", type="password")
+
+    st.markdown("---")
+    
+    # 🎭 NEW: Teaching Style Selector
+    st.subheader("🎭 Teaching Style")
+    teaching_style = st.radio(
+        "How should I help you?",
+        [
+            "Direct Solution (Step-by-step)", 
+            "Socratic Guide (Give hints, don't solve)", 
+            "ELI5 (Simple language)",
+            "Strict Professor (Deep theory)"
+        ],
+        index=0
+    )
 
 gemini_model = init_gemini(api_key_input)
 
@@ -137,18 +152,19 @@ def call_gemini(contents):
 def append_user_message(text):
     msg = {"role": "user", "text": text}
     st.session_state.messages.append(msg)
-    save_chat_to_db() # Auto-save
+    save_chat_to_db()
 
 def append_assistant_message(text):
     msg = {"role": "assistant", "text": text}
     st.session_state.messages.append(msg)
-    save_chat_to_db() # Auto-save
+    save_chat_to_db()
 
 def get_chat_history_text():
     history_context = ""
-    recent_messages = st.session_state.messages[-6:]
+    # Look deeper into history for better context (last 10 turns)
+    recent_messages = st.session_state.messages[-10:]
     for msg in recent_messages:
-        role = "User" if msg["role"] == "user" else "NexStudy AI"
+        role = "Student" if msg["role"] == "user" else "Tutor"
         clean_text = msg['text'].replace("\n", " ") 
         history_context += f"{role}: {clean_text}\n"
     return history_context
@@ -162,7 +178,8 @@ with left:
     mode = st.radio(
         "Choose Mode:", 
         ["💬 Doubt Solver & Chat", "📖 Topic Explainer"], 
-        index=0
+        index=0,
+        label_visibility="collapsed"
     )
     st.markdown("---")
 
@@ -185,7 +202,6 @@ with left:
             if st.button("🗑️ Clear Chat"):
                 st.session_state.messages = []
                 if user and supabase:
-                    # Clear DB too
                     try:
                         supabase.table("profiles").update({"chat_history": []}).eq("id", user["id"]).execute()
                     except: pass
@@ -204,8 +220,8 @@ with left:
     # MODE 2: TOPIC EXPLAINER CONTROLS
     # ==========================================
     elif mode == "📖 Topic Explainer":
-        st.markdown("#### 🧠 Learn a Concept")
-        topic_input = st.text_input("Topic:", placeholder="e.g. Thermodynamics")
+        st.markdown("#### 🧠 Deep Dive")
+        topic_input = st.text_input("Concept:", placeholder="e.g. Black Holes, Recursion")
         explanation_level = st.selectbox("Depth:", ["ELI5", "High School", "College", "PhD"])
         include_links = st.checkbox("Include Video Links", value=True)
         
@@ -230,6 +246,7 @@ with left:
 # ---------------- RIGHT COLUMN: Interaction Area ----------------
 with right:
     
+    # === CHAT VIEW ===
     if mode == "💬 Doubt Solver & Chat":
         chat_container = st.container()
         with chat_container:
@@ -237,23 +254,24 @@ with right:
                 if msg["role"] == "user":
                     user_text = msg['text'].replace('\n', '<br>')
                     st.markdown(f"""
-                        <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #000000;">
+                        <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #000000; border-left: 5px solid #4F46E5;">
                             <h5 style="margin: 0 0 8px 0; color: #444;">👤 You</h5>
                             <div style="font-size: 1rem;">{user_text}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
-                    st.markdown(f"### 🧠 NexStudy")
+                    st.markdown(f"### 🤖 NexStudy")
                     st.markdown(msg['text'])
                     
+                    # Tool Buttons below AI text
                     b1, b2, b3 = st.columns([1,1,1])
-                    if b1.button("Simplify", key=f"s_{i}"):
-                        res = call_gemini([f"Simplify this:\n\n{msg['text']}"])
+                    if b1.button("Simplify 👶", key=f"s_{i}"):
+                        res = call_gemini([f"Simplify this specific explanation:\n\n{msg['text']}"])
                         if not res.get("error"): append_assistant_message(res["text"]); st.rerun()
-                    if b2.button("Steps", key=f"st_{i}"):
-                        res = call_gemini([f"Show steps:\n\n{msg['text']}"])
+                    if b2.button("Show Steps 🪜", key=f"st_{i}"):
+                        res = call_gemini([f"Break this down into numbered step-by-step logic:\n\n{msg['text']}"])
                         if not res.get("error"): append_assistant_message(res["text"]); st.rerun()
-                    if b3.button("Save", key=f"sv_{i}"):
+                    if b3.button("Save 💾", key=f"sv_{i}"):
                         st.session_state.saved.append({"text": msg["text"], "timestamp": str(datetime.datetime.now())})
                         st.success("Saved!")
                     st.divider()
@@ -263,10 +281,12 @@ with right:
         with st.form(key="chat_form", clear_on_submit=True):
             col_in, col_btn = st.columns([6, 1])
             with col_in:
-                user_input = st.text_area("Type your question...", height=80, key="u_in")
+                user_input = st.text_area("Ask a question...", height=80, key="u_in", placeholder="How do I calculate...?")
             
             uploaded_pdf = None
             uploaded_image = None
+            
+            # Conditional uploaders based on selection
             if st.session_state.get("input_type") == "PDF Document":
                 uploaded_pdf = st.file_uploader("PDF:", type=["pdf"])
             elif st.session_state.get("input_type") == "Image (Problem)":
@@ -277,13 +297,35 @@ with right:
                 st.write("")
                 if st.form_submit_button("🚀 Send"):
                     history_text = get_chat_history_text()
-                    system_prompt = f"You are NexStudy. Context:\n{history_text}\nAnswer the new question."
+                    
+                    # 🎭 DYNAMIC SYSTEM PROMPT BASED ON STYLE
+                    persona_instruction = ""
+                    if teaching_style == "Direct Solution (Step-by-step)":
+                        persona_instruction = "Provide a clear, correct, and direct answer. Show all steps if it is a math/science problem."
+                    elif teaching_style == "Socratic Guide (Give hints, don't solve)":
+                        persona_instruction = "Do NOT give the final answer immediately. Ask the student a guiding question to help them figure it out. Act like a supportive coach."
+                    elif teaching_style == "ELI5 (Simple language)":
+                        persona_instruction = "Explain like the user is 5 years old. Use analogies (cars, pizza, games). Avoid jargon."
+                    elif teaching_style == "Strict Professor (Deep theory)":
+                        persona_instruction = "Be formal and academic. Focus on the underlying theory and definitions. Use precise terminology."
+
+                    system_prompt = f"""
+                    You are NexStudy, an expert AI Tutor.
+                    **Current Teaching Style:** {teaching_style}
+                    **Instruction:** {persona_instruction}
+                    
+                    **Context from previous conversation:**
+                    {history_text}
+                    
+                    **Task:** Answer the new user question/file below.
+                    After your answer, suggest 3 short follow-up questions the student might want to ask next to deepen their understanding.
+                    """
                     
                     content_parts = [system_prompt]
                     display_text = []
 
                     if user_input.strip():
-                        content_parts.append(user_input)
+                        content_parts.append(f"Student Question: {user_input}")
                         display_text.append(user_input)
 
                     if uploaded_pdf:
@@ -312,9 +354,13 @@ with right:
                     else:
                         st.warning("Empty message.")
     
+    # === TOPIC EXPLAINER VIEW ===
     elif mode == "📖 Topic Explainer":
         if st.session_state.topic_explanation:
             st.markdown("### 📝 Topic Guide")
             st.markdown(st.session_state.topic_explanation)
+            st.markdown("---")
+            if st.button("📋 Copy Text"):
+                 st.code(st.session_state.topic_explanation)
         else:
-            st.info("👈 Use the sidebar to generate a topic guide.")
+            st.info("👈 Use the sidebar to generate a deep-dive topic guide.")
