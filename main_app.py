@@ -148,7 +148,7 @@ def login(email: str, password: str):
 # =========================================================
 @st.dialog("Welcome to NexStudy 🧠")
 def login_dialog():
-    st.session_state.auth_dialog_shown = True
+    st.session_state.auth_dialog_shown = False
 
     tabs = st.tabs(["Log In", "Sign Up"])
 
