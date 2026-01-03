@@ -148,7 +148,7 @@ def login(email: str, password: str):
 # =========================================================
 @st.dialog("Welcome to NexStudy 🧠")
 def login_dialog():
-    st.session_state.auth_dialog_shown = False
+    st.session_state.auth_dialog_shown = True
 
     tabs = st.tabs(["Log In", "Sign Up"])
 
@@ -201,13 +201,9 @@ def login_dialog():
             else:
                 st.warning("Please fill all fields.")
 
-# Trigger dialog if no user and not guest
-if (
-    not st.session_state.user
-    and not st.session_state.is_guest
-    and not st.session_state.auth_dialog_shown
-):
-    login_dialog()
+# ✅ REMOVED AUTO-TRIGGER: dialog will NOT open on page load anymore
+# (no call to login_dialog() here)
+
 
 # =========================================================
 # GOOGLE ANALYTICS (GTAG)
@@ -393,7 +389,9 @@ with st.sidebar:
             st.session_state.is_guest = False
             st.session_state.auth_dialog_shown = False
             st.session_state.auth_mode = "login"
-            st.rerun()
+            # 🔹 open the dialog directly on click
+            login_dialog()
+
 # ---------------- Footer ----------------
 # st.markdown("---")
 # st.caption("✨ Built with ❤️ by Garv | Powered by AI | NexStudy 2025")
