@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.set_page_config(page_title="About-us", page_icon="ℹ️", layout="wide")
+st.set_page_config(page_title="About Us", page_icon="ℹ️", layout="wide")
 
 st.title("ℹ️ About NexStudy")
 st.markdown("""
