@@ -3,7 +3,7 @@ import random
 
 st.title("💡 Smart Study Tips")
 st.set_page_config(page_title="Study Tips", page_icon="💡", layout="wide")
-st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
+# st.markdown("<style>footer{visibility:hidden;} </style>", unsafe_allow_html=True)
 
 
 tips = [
