@@ -135,7 +135,7 @@ with st.sidebar:
         index=0
     )
 
-# gemini_model = init_gemini(api_key_input)
+gemini_model = init_gemini(api_key_input)
 
 # ---------------- Helpers ----------------
 def extract_text_from_pdf(uploaded_file):
