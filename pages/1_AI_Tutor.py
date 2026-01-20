@@ -116,9 +116,9 @@ with st.sidebar:
     api_key_input = None
     if "GEMINI_API_KEY" in st.secrets:
         api_key_input = st.secrets["GEMINI_API_KEY"]
-    # else:
-        # with st.expander("🔧 Advanced: Use Custom Key"):
-            # api_key_input = st.text_input("Enter Gemini API Key:", type="password")
+    else:
+        with st.expander("🔧 Advanced: Use Custom Key"):
+            api_key_input = st.text_input("Enter Gemini API Key:", type="password")
 
     st.markdown("---")
     
