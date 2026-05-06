@@ -1,5 +1,5 @@
 # Core app
-streamlit==1.39.0
+streamlit==1.32.0
 
 # PDF handling
 PyPDF2==3.0.1
@@ -23,10 +23,11 @@ beautifulsoup4==4.12.3
 pdfplumber
 matplotlib==3.9.2
 duckduckgo-search
-google-generativeai
+google-generativeai==0.4.1
 openai
 pytesseract
 gTTs
 watchdog
 pyrebase4
 supabase
+python_version = "3.10"
