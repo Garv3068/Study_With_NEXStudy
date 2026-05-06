@@ -5,3 +5,6 @@ backgroundColor="#0E1117"       # deep modern black
 secondaryBackgroundColor="#1E222A"
 textColor="#FFFFFF"
 font="sans serif"
+
+[runner]
+python_version = "3.10"
